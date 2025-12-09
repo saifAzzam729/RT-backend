@@ -5,7 +5,7 @@ import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { AppModule } from '../src/app.module';
+import { AppModule } from '../dist/src/app.module';
 
 let app: NestExpressApplication;
 
