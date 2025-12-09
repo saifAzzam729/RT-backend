@@ -1,0 +1,324 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums
+enum UserRole {
+  user
+  organization
+  company
+  admin
+}
+
+enum TenderStatus {
+  open
+  closed
+  draft
+}
+
+enum JobStatus {
+  open
+  closed
+  draft
+}
+
+enum ApplicationStatus {
+  pending
+  reviewed
+  accepted
+  rejected
+}
+
+enum ReportStatus {
+  new
+  in_review
+  resolved
+}
+
+enum NotificationStatus {
+  new
+  read
+}
+
+enum SecondaryAccountStatus {
+  pending
+  accepted
+  rejected
+}
+
+// Profiles table (extends auth)
+model Profile {
+  id                      String                @id @default(uuid())
+  email                   String                @unique
+  password_hash           String?
+  full_name               String?
+  role                    UserRole              @default(user)
+  phone                   String?
+  avatar_url              String?
+  bio                     String?
+  email_verified          Boolean               @default(false)
+  email_verification_otp  String?
+  otp_expires_at          DateTime?
+  created_at              DateTime              @default(now())
+  updated_at              DateTime              @updatedAt
+
+  // Relations
+  organizations           Organization[]
+  companies               Company[]
+  job_applications        JobApplication[]
+  tender_applications     TenderApplication[]
+  analytics               Analytics[]
+  reports                 Report[]
+  refresh_tokens          RefreshToken[]
+  invited_secondary_accounts OrganizationSecondaryAccount[] @relation("InvitedBy")
+  secondary_account       OrganizationSecondaryAccount? @relation("SecondaryUser")
+
+  @@index([role])
+  @@index([email])
+  @@map("profiles")
+}
+
+// Refresh tokens for JWT
+model RefreshToken {
+  id         String   @id @default(uuid())
+  token      String   @unique
+  user_id    String
+  expires_at DateTime
+  created_at DateTime @default(now())
+
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token])
+  @@map("refresh_tokens")
+}
+
+// Organizations table
+model Organization {
+  id                String                           @id @default(uuid())
+  user_id           String
+  name              String
+  description       String?
+  website           String?
+  logo_url          String?
+  location          String?
+  industry          String?
+  license_number    String?
+  license_file_url  String?
+  work_sectors      String[]                         @default([])
+  profile_complete  Boolean                          @default(false)
+  approved          Boolean                          @default(false)
+  created_at        DateTime                         @default(now())
+  updated_at        DateTime                         @updatedAt
+
+  // Relations
+  user              Profile                          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenders           Tender[]
+  secondary_accounts OrganizationSecondaryAccount[]
+
+  @@index([user_id])
+  @@map("organizations")
+}
+
+// Organization secondary accounts
+model OrganizationSecondaryAccount {
+  id               String                  @id @default(uuid())
+  organization_id  String
+  email            String
+  invited_by       String
+  invitation_token String                  @unique
+  status           SecondaryAccountStatus  @default(pending)
+  user_id          String?                 @unique
+  accepted_at      DateTime?
+  created_at       DateTime                @default(now())
+  updated_at       DateTime                @updatedAt
+
+  // Relations
+  organization     Organization            @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  inviter          Profile                 @relation("InvitedBy", fields: [invited_by], references: [id], onDelete: Cascade)
+  user             Profile?                @relation("SecondaryUser", fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@unique([organization_id, email])
+  @@index([organization_id])
+  @@index([invitation_token])
+  @@index([user_id])
+  @@map("organization_secondary_accounts")
+}
+
+// Companies table
+model Company {
+  id          String   @id @default(uuid())
+  user_id     String
+  name        String
+  description String?
+  website     String?
+  logo_url    String?
+  location    String?
+  industry    String?
+  size        String?
+  approved    Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  // Relations
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  jobs Job[]
+
+  @@index([user_id])
+  @@map("companies")
+}
+
+// Tenders table (posted by organizations)
+model Tender {
+  id              String         @id @default(uuid())
+  organization_id String
+  title           String
+  description     String
+  requirements    String?
+  deadline        DateTime?
+  status          TenderStatus   @default(draft)
+  location        String?
+  category        String?
+  views_count     Int            @default(0)
+  created_at      DateTime       @default(now())
+  updated_at      DateTime       @updatedAt
+
+  // Relations
+  organization    Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  applications    TenderApplication[]
+
+  @@index([organization_id])
+  @@index([status])
+  @@map("tenders")
+}
+
+// Jobs table (posted by companies)
+model Job {
+  id               String     @id @default(uuid())
+  company_id       String
+  title            String
+  description      String
+  requirements     String?
+  salary_min       Decimal?   @db.Decimal(10, 2)
+  salary_max       Decimal?   @db.Decimal(10, 2)
+  employment_type  String?
+  experience_level String?
+  status           JobStatus  @default(draft)
+  location         String?
+  category         String?
+  views_count      Int        @default(0)
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
+
+  // Relations
+  company      Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  applications JobApplication[]
+
+  @@index([company_id])
+  @@index([status])
+  @@map("jobs")
+}
+
+// Tender applications (users applying to tenders)
+model TenderApplication {
+  id           String            @id @default(uuid())
+  tender_id    String
+  user_id      String
+  cover_letter String?
+  resume_url   String?
+  status       ApplicationStatus @default(pending)
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+
+  // Relations
+  tender Tender  @relation(fields: [tender_id], references: [id], onDelete: Cascade)
+  user   Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([tender_id, user_id])
+  @@index([tender_id])
+  @@index([user_id])
+  @@map("tender_applications")
+}
+
+// Job applications (users applying to jobs)
+model JobApplication {
+  id           String            @id @default(uuid())
+  job_id       String
+  user_id      String
+  cover_letter String?
+  resume_url   String?
+  status       ApplicationStatus @default(pending)
+  created_at   DateTime          @default(now())
+  updated_at   DateTime          @updatedAt
+
+  // Relations
+  job  Job     @relation(fields: [job_id], references: [id], onDelete: Cascade)
+  user Profile @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([job_id, user_id])
+  @@index([job_id])
+  @@index([user_id])
+  @@map("job_applications")
+}
+
+// Analytics table for tracking views and interactions
+model Analytics {
+  id          String   @id @default(uuid())
+  user_id     String?
+  event_type  String
+  entity_type String
+  entity_id   String
+  metadata    Json?
+  created_at  DateTime @default(now())
+
+  // Relations
+  user Profile? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([entity_type, entity_id])
+  @@index([created_at])
+  @@map("analytics")
+}
+
+// Reports table
+model Report {
+  id           String       @id @default(uuid())
+  reporter_id  String?
+  report_topic String?
+  listing_type String?
+  listing_id   String?
+  listing_url  String?
+  details      String?
+  contact_email String?
+  status       ReportStatus @default(new)
+  created_at   DateTime     @default(now())
+  updated_at   DateTime     @updatedAt
+
+  // Relations
+  reporter      Profile?           @relation(fields: [reporter_id], references: [id], onDelete: SetNull)
+  notifications ReportNotification[]
+
+  @@map("reports")
+}
+
+// Report notifications table
+model ReportNotification {
+  id         String             @id @default(uuid())
+  report_id  String
+  status     NotificationStatus @default(new)
+  metadata   Json?
+  created_at DateTime           @default(now())
+  read_at    DateTime?
+
+  // Relations
+  report Report @relation(fields: [report_id], references: [id], onDelete: Cascade)
+
+  @@map("report_notifications")
+}
