@@ -23,7 +23,7 @@ export class AuthService {
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
-    const { email, password, full_name, role } = signUpDto;
+    const { email, password, full_name, role, phone } = signUpDto;
 
     // Check if user already exists
     const existingUser = await this.prisma.profile.findUnique({
@@ -32,6 +32,17 @@ export class AuthService {
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
+    }
+
+    // Check if phone number is already in use (if provided)
+    if (phone) {
+      const existingPhoneUser = await this.prisma.profile.findFirst({
+        where: { phone },
+      });
+
+      if (existingPhoneUser) {
+        throw new ConflictException('User with this phone number already exists');
+      }
     }
 
     // Hash password
@@ -48,6 +59,7 @@ export class AuthService {
         password_hash,
         full_name,
         role,
+        phone,
         email_verification_otp: otp,
         otp_expires_at,
         email_verified: false,
@@ -63,18 +75,31 @@ export class AuthService {
         id: user.id,
         email: user.email,
         full_name: user.full_name,
+        phone: user.phone,
         role: user.role,
       },
     };
   }
 
   async login(loginDto: LoginDto) {
-    const { email, password } = loginDto;
+    const { email, phone, password } = loginDto;
 
-    // Find user
-    const user = await this.prisma.profile.findUnique({
-      where: { email },
-    });
+    // Validate that either email or phone is provided
+    if (!email && !phone) {
+      throw new BadRequestException('Either email or phone must be provided');
+    }
+
+    // Find user by email or phone
+    let user;
+    if (email) {
+      user = await this.prisma.profile.findUnique({
+        where: { email },
+      });
+    } else if (phone) {
+      user = await this.prisma.profile.findFirst({
+        where: { phone },
+      });
+    }
 
     if (!user || !user.password_hash) {
       throw new UnauthorizedException('Invalid credentials');
@@ -100,6 +125,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         full_name: user.full_name,
+        phone: user.phone,
         role: user.role,
       },
       ...tokens,

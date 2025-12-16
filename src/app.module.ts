@@ -13,6 +13,7 @@ import { ApplicationsModule } from './applications/applications.module';
 import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { StorageModule } from './storage/storage.module';
+import { PricingModule } from './pricing/pricing.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -33,6 +34,7 @@ import configuration from './config/configuration';
     AdminModule,
     ReportsModule,
     StorageModule,
+    PricingModule,
   ],
   controllers: [AppController],
   providers: [AppService],

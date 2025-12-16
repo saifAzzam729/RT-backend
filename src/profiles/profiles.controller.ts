@@ -2,6 +2,7 @@ import { Controller, Get, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { ProfilesService } from './profiles.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
+import { UpdatePlanStatusDto } from './dto/update-plan-status.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
@@ -28,6 +29,18 @@ export class ProfilesController {
     @Body() updateProfileDto: UpdateProfileDto,
   ) {
     return this.profilesService.updateProfile(user.id, updateProfileDto);
+  }
+
+  @Patch('me/plan-status')
+  @ApiOperation({ summary: 'Update user plan status' })
+  @ApiResponse({ status: 200, description: 'Plan status updated successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Profile not found' })
+  async updatePlanStatus(
+    @CurrentUser() user: CurrentUserData,
+    @Body() updatePlanStatusDto: UpdatePlanStatusDto,
+  ) {
+    return this.profilesService.updatePlanStatus(user.id, updatePlanStatusDto);
   }
 }
 

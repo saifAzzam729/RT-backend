@@ -54,6 +54,11 @@ enum SecondaryAccountStatus {
   rejected
 }
 
+enum PlanStatus {
+  free
+  paid
+}
+
 // Profiles table (extends auth)
 model Profile {
   id                      String                @id @default(uuid())
@@ -67,6 +72,7 @@ model Profile {
   email_verified          Boolean               @default(false)
   email_verification_otp  String?
   otp_expires_at          DateTime?
+  plan_status             PlanStatus            @default(free)
   created_at              DateTime              @default(now())
   updated_at              DateTime              @updatedAt
 
