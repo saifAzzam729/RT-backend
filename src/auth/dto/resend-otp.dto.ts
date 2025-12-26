@@ -1,14 +1,14 @@
-import { IsEmail, IsNotEmpty } from 'class-validator';
+import { IsNotEmpty, IsUUID } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class ResendOtpDto {
   @ApiProperty({
-    description: 'User email address',
-    example: 'user@example.com',
+    description: 'User ID',
+    example: 'uuid',
   })
-  @IsEmail()
+  @IsUUID()
   @IsNotEmpty()
-  email: string;
+  userId: string;
 }
 
 

@@ -19,7 +19,18 @@ export class CompaniesService {
       },
     });
 
-    return company;
+    return {
+      id: company.id,
+      name: company.name,
+      description: company.description,
+      location: company.location,
+      website: company.website,
+      logo: company.logo_url,
+      verified: company.approved,
+      userId: company.user_id,
+      createdAt: company.created_at.toISOString(),
+      updatedAt: company.updated_at.toISOString(),
+    };
   }
 
   async findOne(id: string) {
@@ -40,7 +51,18 @@ export class CompaniesService {
       throw new NotFoundException('Company not found');
     }
 
-    return company;
+    return {
+      id: company.id,
+      name: company.name,
+      description: company.description,
+      location: company.location,
+      website: company.website,
+      logo: company.logo_url,
+      verified: company.approved,
+      userId: company.user_id,
+      createdAt: company.created_at.toISOString(),
+      updatedAt: company.updated_at.toISOString(),
+    };
   }
 
   async findByUserId(userId: string) {
@@ -50,7 +72,13 @@ export class CompaniesService {
   }
 
   async update(id: string, userId: string, updateCompanyDto: UpdateCompanyDto) {
-    const company = await this.findOne(id);
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
 
     if (company.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this company');
@@ -61,7 +89,69 @@ export class CompaniesService {
       data: updateCompanyDto,
     });
 
-    return updatedCompany;
+    return {
+      id: updatedCompany.id,
+      name: updatedCompany.name,
+      description: updatedCompany.description,
+      location: updatedCompany.location,
+      website: updatedCompany.website,
+      logo: updatedCompany.logo_url,
+      verified: updatedCompany.approved,
+      userId: updatedCompany.user_id,
+      createdAt: updatedCompany.created_at.toISOString(),
+      updatedAt: updatedCompany.updated_at.toISOString(),
+    };
+  }
+
+  async findAll() {
+    const companies = await this.prisma.company.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            full_name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    return companies.map((company) => ({
+      id: company.id,
+      name: company.name,
+      description: company.description,
+      location: company.location,
+      website: company.website,
+      logo: company.logo_url,
+      verified: company.approved,
+      userId: company.user_id,
+      createdAt: company.created_at.toISOString(),
+      updatedAt: company.updated_at.toISOString(),
+    }));
+  }
+
+  async delete(id: string, userId: string, userRole: string) {
+    const company = await this.prisma.company.findUnique({
+      where: { id },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
+    // Admin can delete any company, otherwise only owner can delete
+    if (company.user_id !== userId && userRole !== 'admin') {
+      throw new ForbiddenException('You do not have permission to delete this company');
+    }
+
+    await this.prisma.company.delete({
+      where: { id },
+    });
+
+    return { success: true };
   }
 
   async getQuota(companyId: string) {

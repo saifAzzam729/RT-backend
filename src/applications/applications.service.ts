@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { ApplyToJobDto } from './dto/apply-to-job.dto';
 import { ApplyToTenderDto } from './dto/apply-to-tender.dto';
 import { UpdateApplicationStatusDto } from './dto/update-application-status.dto';
+import { QueryApplicationsDto } from './dto/query-applications.dto';
 
 @Injectable()
 export class ApplicationsService {
@@ -321,6 +322,253 @@ export class ApplicationsService {
       where: { id: applicationId },
       data: { status: updateDto.status },
     });
+  }
+
+  // Unified application methods
+  async findAll(queryDto: QueryApplicationsDto, userId?: string, userRole?: string) {
+    const { userId: filterUserId, jobId, tenderId } = queryDto;
+
+    const applications: any[] = [];
+
+    // Get job applications if jobId is specified or no specific filter
+    if (!tenderId || jobId) {
+      const jobWhere: any = {};
+      if (jobId) jobWhere.job_id = jobId;
+      if (filterUserId) jobWhere.user_id = filterUserId;
+      if (!jobId && !filterUserId && userId && userRole !== 'admin') {
+        // If no filters and not admin, only show user's own applications
+        jobWhere.user_id = userId;
+      }
+
+      const jobApplications = await this.prisma.jobApplication.findMany({
+        where: jobWhere,
+        include: {
+          job: {
+            include: {
+              company: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              full_name: true,
+            },
+          },
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+      });
+
+      applications.push(
+        ...jobApplications.map((app) => ({
+          id: app.id,
+          jobId: app.job_id,
+          userId: app.user_id,
+          status: app.status,
+          coverLetter: app.cover_letter,
+          resume: app.resume_url,
+          createdAt: app.created_at.toISOString(),
+          updatedAt: app.updated_at.toISOString(),
+        })),
+      );
+    }
+
+    // Get tender applications if tenderId is specified or no specific filter
+    if (!jobId || tenderId) {
+      const tenderWhere: any = {};
+      if (tenderId) tenderWhere.tender_id = tenderId;
+      if (filterUserId) tenderWhere.user_id = filterUserId;
+      if (!tenderId && !filterUserId && userId && userRole !== 'admin') {
+        // If no filters and not admin, only show user's own applications
+        tenderWhere.user_id = userId;
+      }
+
+      const tenderApplications = await this.prisma.tenderApplication.findMany({
+        where: tenderWhere,
+        include: {
+          tender: {
+            include: {
+              organization: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          user: {
+            select: {
+              id: true,
+              email: true,
+              full_name: true,
+            },
+          },
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+      });
+
+      applications.push(
+        ...tenderApplications.map((app) => ({
+          id: app.id,
+          tenderId: app.tender_id,
+          userId: app.user_id,
+          status: app.status,
+          coverLetter: app.cover_letter,
+          resume: app.resume_url,
+          createdAt: app.created_at.toISOString(),
+          updatedAt: app.updated_at.toISOString(),
+        })),
+      );
+    }
+
+    return applications;
+  }
+
+  async findOne(applicationId: string, userId?: string, userRole?: string) {
+    // Try to find as job application first
+    let application = await this.prisma.jobApplication.findUnique({
+      where: { id: applicationId },
+      include: {
+        job: {
+          include: {
+            company: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            full_name: true,
+          },
+        },
+      },
+    });
+
+    if (application) {
+      // Check authorization
+      if (userRole !== 'admin' && application.user_id !== userId && application.job.company.user_id !== userId) {
+        throw new ForbiddenException('You do not have permission to view this application');
+      }
+
+      return {
+        id: application.id,
+        jobId: application.job_id,
+        userId: application.user_id,
+        status: application.status,
+        coverLetter: application.cover_letter,
+        resume: application.resume_url,
+        createdAt: application.created_at.toISOString(),
+        updatedAt: application.updated_at.toISOString(),
+      };
+    }
+
+    // Try to find as tender application
+    const tenderApp = await this.prisma.tenderApplication.findUnique({
+      where: { id: applicationId },
+      include: {
+        tender: {
+          include: {
+            organization: true,
+          },
+        },
+        user: {
+          select: {
+            id: true,
+            email: true,
+            full_name: true,
+          },
+        },
+      },
+    });
+
+    if (tenderApp) {
+      // Check authorization
+      if (userRole !== 'admin' && tenderApp.user_id !== userId && tenderApp.tender.organization.user_id !== userId) {
+        throw new ForbiddenException('You do not have permission to view this application');
+      }
+
+      return {
+        id: tenderApp.id,
+        tenderId: tenderApp.tender_id,
+        userId: tenderApp.user_id,
+        status: tenderApp.status,
+        coverLetter: tenderApp.cover_letter,
+        resume: tenderApp.resume_url,
+        createdAt: tenderApp.created_at.toISOString(),
+        updatedAt: tenderApp.updated_at.toISOString(),
+      };
+    }
+
+    throw new NotFoundException('Application not found');
+  }
+
+  async delete(applicationId: string, userId: string, userRole: string) {
+    // Try to find as job application first
+    let application = await this.prisma.jobApplication.findUnique({
+      where: { id: applicationId },
+      include: {
+        job: {
+          include: {
+            company: true,
+          },
+        },
+      },
+    });
+
+    if (application) {
+      // Check authorization: user can delete their own, or company owner/admin can delete
+      if (
+        application.user_id !== userId &&
+        application.job.company.user_id !== userId &&
+        userRole !== 'admin'
+      ) {
+        throw new ForbiddenException('You do not have permission to delete this application');
+      }
+
+      await this.prisma.jobApplication.delete({
+        where: { id: applicationId },
+      });
+      return { success: true };
+    }
+
+    // Try to find as tender application
+    const tenderApp = await this.prisma.tenderApplication.findUnique({
+      where: { id: applicationId },
+      include: {
+        tender: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (tenderApp) {
+      // Check authorization: user can delete their own, or organization owner/admin can delete
+      if (
+        tenderApp.user_id !== userId &&
+        tenderApp.tender.organization.user_id !== userId &&
+        userRole !== 'admin'
+      ) {
+        throw new ForbiddenException('You do not have permission to delete this application');
+      }
+
+      await this.prisma.tenderApplication.delete({
+        where: { id: applicationId },
+      });
+      return { success: true };
+    }
+
+    throw new NotFoundException('Application not found');
   }
 }
 

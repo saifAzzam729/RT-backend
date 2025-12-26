@@ -23,7 +23,18 @@ export class OrganizationsService {
       },
     });
 
-    return organization;
+    return {
+      id: organization.id,
+      name: organization.name,
+      description: organization.description,
+      location: organization.location,
+      website: organization.website,
+      logo: organization.logo_url,
+      verified: organization.approved,
+      userId: organization.user_id,
+      createdAt: organization.created_at.toISOString(),
+      updatedAt: organization.updated_at.toISOString(),
+    };
   }
 
   async findOne(id: string) {
@@ -44,7 +55,18 @@ export class OrganizationsService {
       throw new NotFoundException('Organization not found');
     }
 
-    return organization;
+    return {
+      id: organization.id,
+      name: organization.name,
+      description: organization.description,
+      location: organization.location,
+      website: organization.website,
+      logo: organization.logo_url,
+      verified: organization.approved,
+      userId: organization.user_id,
+      createdAt: organization.created_at.toISOString(),
+      updatedAt: organization.updated_at.toISOString(),
+    };
   }
 
   async findByUserId(userId: string) {
@@ -54,7 +76,13 @@ export class OrganizationsService {
   }
 
   async update(id: string, userId: string, updateOrganizationDto: UpdateOrganizationDto) {
-    const organization = await this.findOne(id);
+    const organization = await this.prisma.organization.findUnique({
+      where: { id },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
 
     if (organization.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this organization');
@@ -72,7 +100,69 @@ export class OrganizationsService {
       },
     });
 
-    return updatedOrganization;
+    return {
+      id: updatedOrganization.id,
+      name: updatedOrganization.name,
+      description: updatedOrganization.description,
+      location: updatedOrganization.location,
+      website: updatedOrganization.website,
+      logo: updatedOrganization.logo_url,
+      verified: updatedOrganization.approved,
+      userId: updatedOrganization.user_id,
+      createdAt: updatedOrganization.created_at.toISOString(),
+      updatedAt: updatedOrganization.updated_at.toISOString(),
+    };
+  }
+
+  async findAll() {
+    const organizations = await this.prisma.organization.findMany({
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            full_name: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+
+    return organizations.map((org) => ({
+      id: org.id,
+      name: org.name,
+      description: org.description,
+      location: org.location,
+      website: org.website,
+      logo: org.logo_url,
+      verified: org.approved,
+      userId: org.user_id,
+      createdAt: org.created_at.toISOString(),
+      updatedAt: org.updated_at.toISOString(),
+    }));
+  }
+
+  async delete(id: string, userId: string, userRole: string) {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    // Admin can delete any organization, otherwise only owner can delete
+    if (organization.user_id !== userId && userRole !== 'admin') {
+      throw new ForbiddenException('You do not have permission to delete this organization');
+    }
+
+    await this.prisma.organization.delete({
+      where: { id },
+    });
+
+    return { success: true };
   }
 
   async getQuota(organizationId: string) {
@@ -91,7 +181,13 @@ export class OrganizationsService {
 
   // Secondary accounts
   async inviteSecondaryAccount(organizationId: string, userId: string, email: string) {
-    const organization = await this.findOne(organizationId);
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
 
     if (organization.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to invite users to this organization');
@@ -134,7 +230,13 @@ export class OrganizationsService {
   }
 
   async getSecondaryAccounts(organizationId: string, userId: string) {
-    const organization = await this.findOne(organizationId);
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
 
     if (organization.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to view invitations for this organization');

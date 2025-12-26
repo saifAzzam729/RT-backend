@@ -69,15 +69,12 @@ export class AuthService {
     // Send OTP email
     await this.emailService.sendOTP(email, otp, full_name);
 
+    // Transform user to match requirements format
+    const userResponse = this.transformUserResponse(user);
+
     return {
-      message: 'User created successfully. Please check your email for verification code.',
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        phone: user.phone,
-        role: user.role,
-      },
+      user: userResponse,
+      token: null, // No token until email is verified
     };
   }
 
@@ -120,23 +117,20 @@ export class AuthService {
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // Transform user to match requirements format
+    const userResponse = this.transformUserResponse(user);
+
     return {
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        phone: user.phone,
-        role: user.role,
-      },
-      ...tokens,
+      user: userResponse,
+      token: tokens.access_token, // Use 'token' instead of 'access_token'
     };
   }
 
   async verifyEmail(verifyEmailDto: VerifyEmailDto) {
-    const { email, otp } = verifyEmailDto;
+    const { userId, code } = verifyEmailDto;
 
     const user = await this.prisma.profile.findUnique({
-      where: { email },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -147,7 +141,7 @@ export class AuthService {
       throw new BadRequestException('Email already verified');
     }
 
-    if (user.email_verification_otp !== otp) {
+    if (user.email_verification_otp !== code) {
       throw new BadRequestException('Invalid OTP');
     }
 
@@ -165,24 +159,36 @@ export class AuthService {
       },
     });
 
+    // Get updated user with relations
+    const updatedUser = await this.prisma.profile.findUnique({
+      where: { id: user.id },
+      include: {
+        companies: {
+          select: { id: true },
+          take: 1,
+        },
+        organizations: {
+          select: { id: true },
+          take: 1,
+        },
+      },
+    });
+
     // Generate tokens
     const tokens = await this.generateTokens(user.id, user.email, user.role);
 
+    // Transform user to match requirements format
+    const userResponse = this.transformUserResponse(updatedUser);
+
     return {
-      message: 'Email verified successfully',
-      user: {
-        id: user.id,
-        email: user.email,
-        full_name: user.full_name,
-        role: user.role,
-      },
-      ...tokens,
+      user: userResponse,
+      token: tokens.access_token, // Use 'token' instead of 'access_token'
     };
   }
 
-  async resendOTP(email: string) {
+  async resendOTP(userId: string) {
     const user = await this.prisma.profile.findUnique({
-      where: { email },
+      where: { id: userId },
     });
 
     if (!user) {
@@ -206,10 +212,34 @@ export class AuthService {
     });
 
     // Send OTP email
-    await this.emailService.sendOTP(email, otp, user.full_name || undefined);
+    await this.emailService.sendOTP(user.email, otp, user.full_name || undefined);
 
     return {
-      message: 'Verification code sent successfully',
+      success: true,
+    };
+  }
+
+  private transformUserResponse(profile: any) {
+    // Map role to match requirements: user -> job_seeker
+    let type: 'job_seeker' | 'company' | 'organization' | 'admin' = 'job_seeker';
+    if (profile.role === 'admin') {
+      type = 'admin';
+    } else if (profile.role === 'company') {
+      type = 'company';
+    } else if (profile.role === 'organization') {
+      type = 'organization';
+    }
+
+    return {
+      id: profile.id,
+      email: profile.email,
+      name: profile.full_name || '',
+      type,
+      emailVerified: profile.email_verified,
+      companyId: profile.companies && profile.companies.length > 0 ? profile.companies[0].id : undefined,
+      organizationId: profile.organizations && profile.organizations.length > 0 ? profile.organizations[0].id : undefined,
+      createdAt: profile.created_at.toISOString(),
+      updatedAt: profile.updated_at.toISOString(),
     };
   }
 

@@ -21,6 +21,7 @@ enum UserRole {
 enum TenderStatus {
   open
   closed
+  closing_soon
   draft
 }
 
@@ -57,6 +58,7 @@ enum SecondaryAccountStatus {
 enum PlanStatus {
   free
   paid
+  expired
 }
 
 // Profiles table (extends auth)
@@ -73,6 +75,8 @@ model Profile {
   email_verification_otp  String?
   otp_expires_at          DateTime?
   plan_status             PlanStatus            @default(free)
+  plan_id                 String?
+  plan_expires_at         DateTime?
   created_at              DateTime              @default(now())
   updated_at              DateTime              @updatedAt
 
@@ -327,4 +331,40 @@ model ReportNotification {
   report Report @relation(fields: [report_id], references: [id], onDelete: Cascade)
 
   @@map("report_notifications")
+}
+
+// Pricing plans table
+model PricingPlan {
+  id          String   @id @default(uuid())
+  plan_id     String   @unique
+  name        String
+  description String
+  price       Decimal  @db.Decimal(10, 2)
+  currency    String   @default("USD")
+  period      String   // 'one-time' or 'yearly'
+  plan_type   String   // 'tender', 'job', 'combined', 'vendor', 'vendorAdvertisement'
+  features    String[] @default([])
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+
+  @@index([plan_id])
+  @@index([plan_type])
+  @@map("pricing_plans")
+}
+
+// Content management table
+model Content {
+  id        String   @id @default(uuid())
+  key       String
+  section   String   // 'home' | 'footer' | 'form' | 'general'
+  language  String   @default("en") // 'en' | 'ar'
+  value     Json
+  type      String   @default("text") // 'text' | 'html' | 'json'
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@unique([key, language])
+  @@index([section])
+  @@index([language])
+  @@map("content")
 }

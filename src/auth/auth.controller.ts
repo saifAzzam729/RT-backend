@@ -43,13 +43,13 @@ export class AuthController {
   }
 
   @Public()
-  @Post('resend-otp')
+  @Post('resend-verification')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Resend OTP to email' })
-  @ApiResponse({ status: 200, description: 'OTP successfully resent' })
+  @ApiOperation({ summary: 'Resend verification code' })
+  @ApiResponse({ status: 200, description: 'Verification code successfully resent' })
   @ApiResponse({ status: 404, description: 'User not found' })
-  async resendOTP(@Body() resendOtpDto: ResendOtpDto) {
-    return this.authService.resendOTP(resendOtpDto.email);
+  async resendVerification(@Body() resendOtpDto: ResendOtpDto) {
+    return this.authService.resendOTP(resendOtpDto.userId);
   }
 
   @Public()

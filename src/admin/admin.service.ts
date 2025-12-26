@@ -1,6 +1,10 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveEntityDto } from './dto/approve-entity.dto';
+import { UpdatePricingPlanDto } from './dto/update-pricing-plan.dto';
+import { CreatePricingPlanDto } from './dto/create-pricing-plan.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { UpdateUserPlanDto } from './dto/update-user-plan.dto';
 
 @Injectable()
 export class AdminService {
@@ -134,6 +138,334 @@ export class AdminService {
         tenderApplications: totalTenderApplications,
       },
       recentActivity,
+    };
+  }
+
+  async getPricingPlan(planId: string) {
+    const plan = await this.prisma.pricingPlan.findUnique({
+      where: { plan_id: planId },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Pricing plan with ID ${planId} not found`);
+    }
+
+    return plan;
+  }
+
+  async getAllPricingPlans() {
+    return this.prisma.pricingPlan.findMany({
+      orderBy: [
+        { plan_type: 'asc' },
+        { created_at: 'asc' },
+      ],
+    });
+  }
+
+  async createPricingPlan(createDto: CreatePricingPlanDto) {
+    // Check if plan_id already exists
+    const existing = await this.prisma.pricingPlan.findUnique({
+      where: { plan_id: createDto.plan_id },
+    });
+
+    if (existing) {
+      throw new BadRequestException(`Pricing plan with ID ${createDto.plan_id} already exists`);
+    }
+
+    const plan = await this.prisma.pricingPlan.create({
+      data: {
+        plan_id: createDto.plan_id,
+        name: createDto.name,
+        description: createDto.description,
+        price: createDto.price,
+        currency: createDto.currency || 'USD',
+        period: createDto.period,
+        plan_type: createDto.plan_type,
+        features: createDto.features || [],
+      },
+    });
+
+    return {
+      message: 'Pricing plan created successfully',
+      plan,
+    };
+  }
+
+  async updatePricingPlan(planId: string, updateDto: UpdatePricingPlanDto) {
+    const plan = await this.prisma.pricingPlan.findUnique({
+      where: { plan_id: planId },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Pricing plan with ID ${planId} not found`);
+    }
+
+    const updatedPlan = await this.prisma.pricingPlan.update({
+      where: { plan_id: planId },
+      data: {
+        ...(updateDto.name && { name: updateDto.name }),
+        ...(updateDto.description && { description: updateDto.description }),
+        ...(updateDto.price !== undefined && { price: updateDto.price }),
+        ...(updateDto.currency && { currency: updateDto.currency }),
+        ...(updateDto.period && { period: updateDto.period }),
+        ...(updateDto.plan_type && { plan_type: updateDto.plan_type }),
+        ...(updateDto.features && { features: updateDto.features }),
+      },
+    });
+
+    return {
+      message: 'Pricing plan updated successfully',
+      plan: updatedPlan,
+    };
+  }
+
+  async deletePricingPlan(planId: string) {
+    const plan = await this.prisma.pricingPlan.findUnique({
+      where: { plan_id: planId },
+    });
+
+    if (!plan) {
+      throw new NotFoundException(`Pricing plan with ID ${planId} not found`);
+    }
+
+    await this.prisma.pricingPlan.delete({
+      where: { plan_id: planId },
+    });
+
+    return {
+      message: 'Pricing plan deleted successfully',
+    };
+  }
+
+  async getAllUsers(page: number = 1, limit: number = 20, search?: string) {
+    const skip = (page - 1) * limit;
+    const where = search
+      ? {
+          OR: [
+            { email: { contains: search, mode: 'insensitive' as const } },
+            { full_name: { contains: search, mode: 'insensitive' as const } },
+            { phone: { contains: search, mode: 'insensitive' as const } },
+          ],
+        }
+      : {};
+
+    const [users, total] = await Promise.all([
+      this.prisma.profile.findMany({
+        where,
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true,
+          phone: true,
+          avatar_url: true,
+          bio: true,
+          email_verified: true,
+          plan_status: true,
+          plan_id: true,
+          plan_expires_at: true,
+          created_at: true,
+          updated_at: true,
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+      }),
+      this.prisma.profile.count({ where }),
+    ]);
+
+    return {
+      users,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getUserById(userId: string) {
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        role: true,
+        phone: true,
+        avatar_url: true,
+        bio: true,
+        email_verified: true,
+        plan_status: true,
+        plan_id: true,
+        plan_expires_at: true,
+        created_at: true,
+        updated_at: true,
+        organizations: {
+          select: {
+            id: true,
+            name: true,
+            approved: true,
+          },
+        },
+        companies: {
+          select: {
+            id: true,
+            name: true,
+            approved: true,
+          },
+        },
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    return user;
+  }
+
+  async updateUser(userId: string, updateDto: UpdateUserDto) {
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Check if email is being updated and if it's already taken
+    if (updateDto.email && updateDto.email !== user.email) {
+      const existingUser = await this.prisma.profile.findUnique({
+        where: { email: updateDto.email },
+      });
+
+      if (existingUser) {
+        throw new BadRequestException('Email is already in use');
+      }
+    }
+
+    // Check if phone is being updated and if it's already taken
+    if (updateDto.phone && updateDto.phone !== user.phone) {
+      const existingUser = await this.prisma.profile.findFirst({
+        where: { phone: updateDto.phone },
+      });
+
+      if (existingUser && existingUser.id !== userId) {
+        throw new BadRequestException('Phone number is already in use');
+      }
+    }
+
+    const updatedUser = await this.prisma.profile.update({
+      where: { id: userId },
+      data: {
+        ...(updateDto.email && { email: updateDto.email }),
+        ...(updateDto.full_name !== undefined && { full_name: updateDto.full_name }),
+        ...(updateDto.phone !== undefined && { phone: updateDto.phone }),
+        ...(updateDto.role && { role: updateDto.role }),
+        ...(updateDto.avatar_url !== undefined && { avatar_url: updateDto.avatar_url }),
+        ...(updateDto.bio !== undefined && { bio: updateDto.bio }),
+        ...(updateDto.email_verified !== undefined && { email_verified: updateDto.email_verified }),
+        ...(updateDto.plan_status && { plan_status: updateDto.plan_status }),
+      },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        role: true,
+        phone: true,
+        avatar_url: true,
+        bio: true,
+        email_verified: true,
+        plan_status: true,
+        plan_id: true,
+        plan_expires_at: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+
+    return {
+      message: 'User updated successfully',
+      user: updatedUser,
+    };
+  }
+
+  async deleteUser(userId: string) {
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Prevent deleting admin users
+    if (user.role === 'admin') {
+      throw new BadRequestException('Cannot delete admin users');
+    }
+
+    await this.prisma.profile.delete({
+      where: { id: userId },
+    });
+
+    return {
+      message: 'User deleted successfully',
+    };
+  }
+
+  async updateUserPlan(userId: string, updatePlanDto: UpdateUserPlanDto) {
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException(`User with ID ${userId} not found`);
+    }
+
+    // Validate plan_id if provided
+    if (updatePlanDto.plan_id) {
+      const plan = await this.prisma.pricingPlan.findUnique({
+        where: { plan_id: updatePlanDto.plan_id },
+      });
+
+      if (!plan) {
+        throw new BadRequestException(`Pricing plan with ID ${updatePlanDto.plan_id} not found`);
+      }
+    }
+
+    const updatedUser = await this.prisma.profile.update({
+      where: { id: userId },
+      data: {
+        ...(updatePlanDto.plan_id !== undefined && { plan_id: updatePlanDto.plan_id }),
+        ...(updatePlanDto.plan_status && { plan_status: updatePlanDto.plan_status }),
+        ...(updatePlanDto.plan_expires_at && { 
+          plan_expires_at: updatePlanDto.plan_expires_at ? new Date(updatePlanDto.plan_expires_at) : null 
+        }),
+      },
+      select: {
+        id: true,
+        email: true,
+        full_name: true,
+        role: true,
+        phone: true,
+        avatar_url: true,
+        bio: true,
+        email_verified: true,
+        plan_status: true,
+        plan_id: true,
+        plan_expires_at: true,
+        created_at: true,
+        updated_at: true,
+      },
+    });
+
+    return {
+      message: 'User plan updated successfully',
+      user: updatedUser,
     };
   }
 }

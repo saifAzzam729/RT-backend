@@ -12,7 +12,7 @@ export class PricingController {
   @Get()
   @ApiOperation({ summary: 'Get all pricing plans' })
   @ApiResponse({ status: 200, description: 'Returns all available pricing plans' })
-  getPricing() {
+  async getPricing() {
     return this.pricingService.getPricing();
   }
 
@@ -22,8 +22,8 @@ export class PricingController {
   @ApiParam({ name: 'planId', description: 'Pricing plan ID' })
   @ApiResponse({ status: 200, description: 'Returns the pricing plan details' })
   @ApiResponse({ status: 404, description: 'Plan not found' })
-  getPlan(@Param('planId') planId: string) {
-    const plan = this.pricingService.getPlanById(planId);
+  async getPlan(@Param('planId') planId: string) {
+    const plan = await this.pricingService.getPlanById(planId);
     if (!plan) {
       return { error: 'Plan not found', planId };
     }
@@ -37,14 +37,14 @@ export class PricingController {
   @ApiQuery({ name: 'quantity', description: 'Quantity (default: 1)', required: false, type: Number })
   @ApiResponse({ status: 200, description: 'Returns calculated price' })
   @ApiResponse({ status: 400, description: 'Invalid plan ID' })
-  calculatePrice(
+  async calculatePrice(
     @Query('planId') planId: string,
     @Query('quantity') quantity?: string,
   ) {
     const qty = quantity ? parseInt(quantity, 10) : 1;
     try {
-      const price = this.pricingService.calculatePrice(planId, qty);
-      const plan = this.pricingService.getPlanById(planId);
+      const price = await this.pricingService.calculatePrice(planId, qty);
+      const plan = await this.pricingService.getPlanById(planId);
       return {
         planId,
         quantity: qty,
@@ -60,4 +60,13 @@ export class PricingController {
     }
   }
 }
+
+
+
+
+
+
+
+
+
 

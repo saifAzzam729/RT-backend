@@ -14,6 +14,7 @@ import { AdminModule } from './admin/admin.module';
 import { ReportsModule } from './reports/reports.module';
 import { StorageModule } from './storage/storage.module';
 import { PricingModule } from './pricing/pricing.module';
+import { ContentModule } from './content/content.module';
 import configuration from './config/configuration';
 
 @Module({
@@ -35,6 +36,7 @@ import configuration from './config/configuration';
     ReportsModule,
     StorageModule,
     PricingModule,
+    ContentModule,
   ],
   controllers: [AppController],
   providers: [AppService],
