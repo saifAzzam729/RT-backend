@@ -16,6 +16,8 @@ import { QueryTendersDto } from './dto/query-tenders.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('tenders')
 @Controller('tenders')
@@ -24,9 +26,11 @@ export class TendersController {
 
   @Post()
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create a new tender' })
+  @Roles(UserRole.company, UserRole.organization)
+  @ApiOperation({ summary: 'Create a new tender (company/organization only)' })
   @ApiResponse({ status: 201, description: 'Tender created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Company or Organization role required' })
   create(
     @CurrentUser() user: CurrentUserData,
     @Body() createTenderDto: CreateTenderDto,

@@ -23,7 +23,7 @@ export class AuthService {
   ) {}
 
   async signUp(signUpDto: SignUpDto) {
-    const { email, password, full_name, role, phone } = signUpDto;
+    const { email, password, full_name, role, phone, drive_link, commercial_file_url } = signUpDto;
 
     // Check if user already exists
     const existingUser = await this.prisma.profile.findUnique({
@@ -32,6 +32,18 @@ export class AuthService {
 
     if (existingUser) {
       throw new ConflictException('User with this email already exists');
+    }
+
+    // Check if there's a pending signup request for this email
+    const existingRequest = await this.prisma.signUpRequest.findFirst({
+      where: {
+        email,
+        status: 'pending',
+      },
+    });
+
+    if (existingRequest) {
+      throw new ConflictException('A signup request with this email is already pending approval');
     }
 
     // Check if phone number is already in use (if provided)
@@ -48,33 +60,25 @@ export class AuthService {
     // Hash password
     const password_hash = await bcrypt.hash(password, 10);
 
-    // Generate OTP
-    const otp = this.emailService.generateOTP();
-    const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
-
-    // Create user
-    const user = await this.prisma.profile.create({
+    // For company, organization, and user roles, create a signup request that needs admin approval
+    // Create signup request
+    const signupRequest = await this.prisma.signUpRequest.create({
       data: {
         email,
         password_hash,
         full_name,
         role,
         phone,
-        email_verification_otp: otp,
-        otp_expires_at,
-        email_verified: false,
+        drive_link,
+        commercial_file_url,
+        status: 'pending',
       },
     });
 
-    // Send OTP email
-    await this.emailService.sendOTP(email, otp, full_name);
-
-    // Transform user to match requirements format
-    const userResponse = this.transformUserResponse(user);
-
     return {
-      user: userResponse,
-      token: null, // No token until email is verified
+      message: 'Signup request submitted successfully. Please wait for admin approval.',
+      requestId: signupRequest.id,
+      email: signupRequest.email,
     };
   }
 

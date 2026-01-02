@@ -2,7 +2,7 @@ import { IsEmail, IsEnum, IsNotEmpty, IsOptional, IsString, Matches, MinLength, 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { UserRole } from '@prisma/client';
 
-export class SignUpDto {
+export class CreateUserDto {
   @ApiProperty({
     description: 'User email address',
     example: 'user@example.com',
@@ -31,14 +31,6 @@ export class SignUpDto {
   @IsNotEmpty()
   full_name: string;
 
-  @ApiPropertyOptional({
-    description: 'User phone number',
-    example: '+1234567890',
-  })
-  @IsOptional()
-  @IsString()
-  phone?: string;
-
   @ApiProperty({
     description: 'User role',
     enum: UserRole,
@@ -48,20 +40,11 @@ export class SignUpDto {
   role: UserRole;
 
   @ApiPropertyOptional({
-    description: 'Drive link (optional)',
-    example: 'https://drive.google.com/...',
+    description: 'User phone number',
+    example: '+1234567890',
   })
   @IsOptional()
-  @IsUrl({}, { message: 'Drive link must be a valid URL' })
-  drive_link?: string;
-
-  @ApiPropertyOptional({
-    description: 'Commercial file URL (optional)',
-    example: 'https://storage.example.com/commercial/file.pdf',
-  })
-  @IsOptional()
-  @IsUrl({}, { message: 'Commercial file URL must be a valid URL' })
-  commercial_file_url?: string;
+  @IsString()
+  phone?: string;
 }
-
 

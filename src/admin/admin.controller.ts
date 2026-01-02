@@ -6,8 +6,12 @@ import { UpdatePricingPlanDto } from './dto/update-pricing-plan.dto';
 import { CreatePricingPlanDto } from './dto/create-pricing-plan.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserPlanDto } from './dto/update-user-plan.dto';
+import { ApproveSignUpRequestDto } from './dto/approve-signup-request.dto';
+import { CreateUserDto } from './dto/create-user.dto';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '@prisma/client';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('admin')
 @ApiBearerAuth('JWT-auth')
@@ -168,6 +172,61 @@ export class AdminController {
     @Body() updatePlanDto: UpdateUserPlanDto,
   ) {
     return this.adminService.updateUserPlan(userId, updatePlanDto);
+  }
+
+  @Get('signup-requests')
+  @ApiOperation({ summary: 'Get all signup requests (admin only)' })
+  @ApiQuery({ name: 'page', description: 'Page number (default: 1)', required: false, type: Number })
+  @ApiQuery({ name: 'limit', description: 'Items per page (default: 20)', required: false, type: Number })
+  @ApiQuery({ name: 'status', description: 'Filter by status (pending, approved, rejected, need_more_info)', required: false, type: String })
+  @ApiResponse({ status: 200, description: 'List of signup requests with pagination' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  getAllSignUpRequests(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('status') status?: string,
+  ) {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const limitNum = limit ? parseInt(limit, 10) : 20;
+    return this.adminService.getAllSignUpRequests(pageNum, limitNum, status);
+  }
+
+  @Get('signup-requests/:requestId')
+  @ApiOperation({ summary: 'Get signup request by ID (admin only)' })
+  @ApiParam({ name: 'requestId', description: 'Signup request ID' })
+  @ApiResponse({ status: 200, description: 'Signup request details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 404, description: 'Signup request not found' })
+  getSignUpRequestById(@Param('requestId') requestId: string) {
+    return this.adminService.getSignUpRequestById(requestId);
+  }
+
+  @Post('signup-requests/:requestId/approve')
+  @ApiOperation({ summary: 'Approve/reject/request more info for signup request (admin only)' })
+  @ApiParam({ name: 'requestId', description: 'Signup request ID' })
+  @ApiResponse({ status: 200, description: 'Signup request status updated successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - Invalid status or missing reason note' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  @ApiResponse({ status: 404, description: 'Signup request not found' })
+  approveSignUpRequest(
+    @Param('requestId') requestId: string,
+    @Body() approveDto: ApproveSignUpRequestDto,
+    @CurrentUser() admin: CurrentUserData,
+  ) {
+    return this.adminService.approveSignUpRequest(requestId, approveDto, admin.id);
+  }
+
+  @Post('users')
+  @ApiOperation({ summary: 'Create a new user (admin only)' })
+  @ApiResponse({ status: 201, description: 'User created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request - Email or phone already in use' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Admin only' })
+  createUser(@Body() createUserDto: CreateUserDto) {
+    return this.adminService.createUser(createUserDto);
   }
 }
 

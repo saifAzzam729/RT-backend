@@ -32,8 +32,47 @@ async function bootstrap() {
   }
 
   // Enable CORS
+  const nodeEnv = configService.get('nodeEnv') || 'development';
+  const frontendUrl = configService.get('frontendUrl') || 'https://rt-syr.com';
+  console.log('frontendUrl', frontendUrl);
+  // In development, allow multiple localhost origins
+  const allowedOrigins = nodeEnv === 'development'
+    ? [
+        frontendUrl,
+        'http://localhost:3000',
+        'http://localhost:8080',
+        'http://localhost:5173', // Vite default
+        'http://localhost:5174',
+        'http://127.0.0.1:3000',
+        'http://127.0.0.1:8080',
+        'http://127.0.0.1:5173',
+        'https://rt-syr.com',
+      ]
+    : [frontendUrl];
+
   app.enableCors({
-    origin: configService.get('frontendUrl'),
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps or curl requests)
+      if (!origin) {
+        return callback(null, true);
+      }
+      
+      // In development, allow all localhost origins
+      if (nodeEnv === 'development') {
+        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+        if (isLocalhost || allowedOrigins.includes(origin)) {
+          return callback(null, true);
+        }
+      }
+      
+      // In production, only allow configured origins
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`CORS blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

@@ -19,16 +19,30 @@ enum UserRole {
 }
 
 enum TenderStatus {
-  open
+  active
   closed
+  open
   closing_soon
   draft
 }
 
 enum JobStatus {
-  open
+  active
   closed
+  open
   draft
+}
+
+enum Sector {
+  WASH
+  FSL
+  EDUCATION
+  HEALTH
+  PROTECTION
+  SHELTER
+  NFI
+  CCCM
+  OTHER
 }
 
 enum ApplicationStatus {
@@ -61,35 +75,44 @@ enum PlanStatus {
   expired
 }
 
+enum SignUpRequestStatus {
+  pending
+  approved
+  rejected
+  need_more_info
+}
+
 // Profiles table (extends auth)
 model Profile {
-  id                      String                @id @default(uuid())
-  email                   String                @unique
-  password_hash           String?
-  full_name               String?
-  role                    UserRole              @default(user)
-  phone                   String?
-  avatar_url              String?
-  bio                     String?
-  email_verified          Boolean               @default(false)
-  email_verification_otp  String?
-  otp_expires_at          DateTime?
-  plan_status             PlanStatus            @default(free)
-  plan_id                 String?
-  plan_expires_at         DateTime?
-  created_at              DateTime              @default(now())
-  updated_at              DateTime              @updatedAt
+  id                     String     @id @default(uuid())
+  email                  String     @unique
+  password_hash          String?
+  full_name              String?
+  role                   UserRole   @default(user)
+  phone                  String?
+  avatar_url             String?
+  bio                    String?
+  email_verified         Boolean    @default(false)
+  email_verification_otp String?
+  otp_expires_at         DateTime?
+  plan_status            PlanStatus @default(free)
+  plan_id                String?
+  plan_expires_at        DateTime?
+  created_at             DateTime   @default(now())
+  updated_at             DateTime   @updatedAt
 
   // Relations
-  organizations           Organization[]
-  companies               Company[]
-  job_applications        JobApplication[]
-  tender_applications     TenderApplication[]
-  analytics               Analytics[]
-  reports                 Report[]
-  refresh_tokens          RefreshToken[]
+  organizations              Organization[]
+  companies                  Company[]
+  job_applications           JobApplication[]
+  tender_applications        TenderApplication[]
+  analytics                  Analytics[]
+  reports                    Report[]
+  refresh_tokens             RefreshToken[]
   invited_secondary_accounts OrganizationSecondaryAccount[] @relation("InvitedBy")
-  secondary_account       OrganizationSecondaryAccount? @relation("SecondaryUser")
+  secondary_account          OrganizationSecondaryAccount?  @relation("SecondaryUser")
+  signup_request             SignUpRequest?
+  reviewed_signup_requests   SignUpRequest[]                @relation("ReviewedBy")
 
   @@index([role])
   @@index([email])
@@ -113,25 +136,25 @@ model RefreshToken {
 
 // Organizations table
 model Organization {
-  id                String                           @id @default(uuid())
-  user_id           String
-  name              String
-  description       String?
-  website           String?
-  logo_url          String?
-  location          String?
-  industry          String?
-  license_number    String?
-  license_file_url  String?
-  work_sectors      String[]                         @default([])
-  profile_complete  Boolean                          @default(false)
-  approved          Boolean                          @default(false)
-  created_at        DateTime                         @default(now())
-  updated_at        DateTime                         @updatedAt
+  id               String   @id @default(uuid())
+  user_id          String
+  name             String
+  description      String?
+  website          String?
+  logo_url         String?
+  location         String?
+  industry         String?
+  license_number   String?
+  license_file_url String?
+  work_sectors     String[] @default([])
+  profile_complete Boolean  @default(false)
+  approved         Boolean  @default(false)
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
 
   // Relations
-  user              Profile                          @relation(fields: [user_id], references: [id], onDelete: Cascade)
-  tenders           Tender[]
+  user               Profile                        @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  tenders            Tender[]
   secondary_accounts OrganizationSecondaryAccount[]
 
   @@index([user_id])
@@ -140,21 +163,21 @@ model Organization {
 
 // Organization secondary accounts
 model OrganizationSecondaryAccount {
-  id               String                  @id @default(uuid())
+  id               String                 @id @default(uuid())
   organization_id  String
   email            String
   invited_by       String
-  invitation_token String                  @unique
-  status           SecondaryAccountStatus  @default(pending)
-  user_id          String?                 @unique
+  invitation_token String                 @unique
+  status           SecondaryAccountStatus @default(pending)
+  user_id          String?                @unique
   accepted_at      DateTime?
-  created_at       DateTime                @default(now())
-  updated_at       DateTime                @updatedAt
+  created_at       DateTime               @default(now())
+  updated_at       DateTime               @updatedAt
 
   // Relations
-  organization     Organization            @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  inviter          Profile                 @relation("InvitedBy", fields: [invited_by], references: [id], onDelete: Cascade)
-  user             Profile?                @relation("SecondaryUser", fields: [user_id], references: [id], onDelete: SetNull)
+  organization Organization @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  inviter      Profile      @relation("InvitedBy", fields: [invited_by], references: [id], onDelete: Cascade)
+  user         Profile?     @relation("SecondaryUser", fields: [user_id], references: [id], onDelete: SetNull)
 
   @@unique([organization_id, email])
   @@index([organization_id])
@@ -188,52 +211,71 @@ model Company {
 
 // Tenders table (posted by organizations)
 model Tender {
-  id              String         @id @default(uuid())
-  organization_id String
-  title           String
-  description     String
-  requirements    String?
-  deadline        DateTime?
-  status          TenderStatus   @default(draft)
-  location        String?
-  category        String?
-  views_count     Int            @default(0)
-  created_at      DateTime       @default(now())
-  updated_at      DateTime       @updatedAt
+  id                      String       @id @default(uuid())
+  organization_id         String
+  title                   String
+  type                    String?
+  sector                  Sector?
+  about_organization      String?
+  description             String
+  project_summary         String?
+  requirements            String?
+  deadline                DateTime?
+  status                  TenderStatus @default(draft)
+  duration                String?
+  estimated_start_date    DateTime?
+  tender_documents_link   String?
+  file_upload_url         String?
+  location                String?
+  category                String?
+  views_count             Int          @default(0)
+  created_at              DateTime     @default(now())
+  updated_at              DateTime     @updatedAt
 
   // Relations
-  organization    Organization          @relation(fields: [organization_id], references: [id], onDelete: Cascade)
-  applications    TenderApplication[]
+  organization Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  applications TenderApplication[]
 
   @@index([organization_id])
   @@index([status])
+  @@index([sector])
   @@map("tenders")
 }
 
 // Jobs table (posted by companies)
 model Job {
-  id               String     @id @default(uuid())
-  company_id       String
-  title            String
-  description      String
-  requirements     String?
-  salary_min       Decimal?   @db.Decimal(10, 2)
-  salary_max       Decimal?   @db.Decimal(10, 2)
-  employment_type  String?
-  experience_level String?
-  status           JobStatus  @default(draft)
-  location         String?
-  category         String?
-  views_count      Int        @default(0)
-  created_at       DateTime   @default(now())
-  updated_at       DateTime   @updatedAt
+  id                    String    @id @default(uuid())
+  company_id            String
+  title                 String
+  type                  String?
+  sector                Sector?
+  about_company         String?
+  description           String
+  project_summary       String?
+  requirements          String?
+  deadline              DateTime?
+  status                JobStatus @default(draft)
+  duration              String?
+  estimated_start_date  DateTime?
+  tender_documents_link String?
+  file_upload_url       String?
+  salary_min            Decimal?  @db.Decimal(10, 2)
+  salary_max            Decimal?  @db.Decimal(10, 2)
+  employment_type       String?
+  experience_level      String?
+  location              String?
+  category              String?
+  views_count           Int       @default(0)
+  created_at            DateTime  @default(now())
+  updated_at            DateTime  @updatedAt
 
   // Relations
-  company      Company             @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  company      Company          @relation(fields: [company_id], references: [id], onDelete: Cascade)
   applications JobApplication[]
 
   @@index([company_id])
   @@index([status])
+  @@index([sector])
   @@map("jobs")
 }
 
@@ -299,20 +341,20 @@ model Analytics {
 
 // Reports table
 model Report {
-  id           String       @id @default(uuid())
-  reporter_id  String?
-  report_topic String?
-  listing_type String?
-  listing_id   String?
-  listing_url  String?
-  details      String?
+  id            String       @id @default(uuid())
+  reporter_id   String?
+  report_topic  String?
+  listing_type  String?
+  listing_id    String?
+  listing_url   String?
+  details       String?
   contact_email String?
-  status       ReportStatus @default(new)
-  created_at   DateTime     @default(now())
-  updated_at   DateTime     @updatedAt
+  status        ReportStatus @default(new)
+  created_at    DateTime     @default(now())
+  updated_at    DateTime     @updatedAt
 
   // Relations
-  reporter      Profile?           @relation(fields: [reporter_id], references: [id], onDelete: SetNull)
+  reporter      Profile?             @relation(fields: [reporter_id], references: [id], onDelete: SetNull)
   notifications ReportNotification[]
 
   @@map("reports")
@@ -341,8 +383,8 @@ model PricingPlan {
   description String
   price       Decimal  @db.Decimal(10, 2)
   currency    String   @default("USD")
-  period      String   // 'one-time' or 'yearly'
-  plan_type   String   // 'tender', 'job', 'combined', 'vendor', 'vendorAdvertisement'
+  period      String // 'one-time' or 'yearly'
+  plan_type   String // 'tender', 'job', 'combined', 'vendor', 'vendorAdvertisement'
   features    String[] @default([])
   created_at  DateTime @default(now())
   updated_at  DateTime @updatedAt
@@ -354,12 +396,12 @@ model PricingPlan {
 
 // Content management table
 model Content {
-  id        String   @id @default(uuid())
-  key       String
-  section   String   // 'home' | 'footer' | 'form' | 'general'
-  language  String   @default("en") // 'en' | 'ar'
-  value     Json
-  type      String   @default("text") // 'text' | 'html' | 'json'
+  id         String   @id @default(uuid())
+  key        String
+  section    String // 'home' | 'footer' | 'form' | 'general'
+  language   String   @default("en") // 'en' | 'ar'
+  value      Json
+  type       String   @default("text") // 'text' | 'html' | 'json'
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -367,4 +409,32 @@ model Content {
   @@index([section])
   @@index([language])
   @@map("content")
+}
+
+// Sign up requests table (for company/organization/user approval)
+model SignUpRequest {
+  id                  String              @id @default(uuid())
+  email               String
+  password_hash       String
+  full_name           String?
+  role                UserRole
+  phone               String?
+  drive_link          String?
+  commercial_file_url String?
+  status              SignUpRequestStatus @default(pending)
+  reason_note         String?
+  reviewed_by_id      String?
+  reviewed_at         DateTime?
+  user_id             String?             @unique
+  created_at          DateTime            @default(now())
+  updated_at          DateTime            @updatedAt
+
+  // Relations
+  user        Profile? @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  reviewed_by Profile? @relation("ReviewedBy", fields: [reviewed_by_id], references: [id], onDelete: SetNull)
+
+  @@index([status])
+  @@index([email])
+  @@index([role])
+  @@map("signup_requests")
 }

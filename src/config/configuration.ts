@@ -24,7 +24,7 @@ export default () => ({
         pass: process.env.SMTP_PASSWORD,
       },
     },
-    from: process.env.EMAIL_FROM || 'RT-SYR <noreply@rt-syr.com>',
+    from: process.env.EMAIL_FROM || 'RT-SYR <info@rt-syr.com>',
   },
   
   storage: {

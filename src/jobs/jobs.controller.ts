@@ -16,6 +16,8 @@ import { QueryJobsDto } from './dto/query-jobs.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { UserRole } from '@prisma/client';
 
 @ApiTags('jobs')
 @Controller('jobs')
@@ -24,9 +26,11 @@ export class JobsController {
 
   @Post()
   @ApiBearerAuth('JWT-auth')
-  @ApiOperation({ summary: 'Create a new job posting' })
+  @Roles(UserRole.company, UserRole.organization)
+  @ApiOperation({ summary: 'Create a new job posting (company/organization only)' })
   @ApiResponse({ status: 201, description: 'Job created successfully' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 403, description: 'Forbidden - Company or Organization role required' })
   create(
     @CurrentUser() user: CurrentUserData,
     @Body() createJobDto: CreateJobDto,

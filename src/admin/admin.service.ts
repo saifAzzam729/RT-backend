@@ -1,14 +1,21 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ApproveEntityDto } from './dto/approve-entity.dto';
 import { UpdatePricingPlanDto } from './dto/update-pricing-plan.dto';
 import { CreatePricingPlanDto } from './dto/create-pricing-plan.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserPlanDto } from './dto/update-user-plan.dto';
+import { ApproveSignUpRequestDto } from './dto/approve-signup-request.dto';
+import { CreateUserDto } from './dto/create-user.dto';
+import * as bcrypt from 'bcrypt';
+import { EmailService } from '../auth/email.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private emailService: EmailService,
+  ) {}
 
   async approveEntity(approveDto: ApproveEntityDto) {
     const { entityType, entityId, approved } = approveDto;
@@ -466,6 +473,211 @@ export class AdminService {
     return {
       message: 'User plan updated successfully',
       user: updatedUser,
+    };
+  }
+
+  async getAllSignUpRequests(page: number = 1, limit: number = 20, status?: string) {
+    const skip = (page - 1) * limit;
+    const where = status ? { status: status as any } : {};
+
+    const [requests, total] = await Promise.all([
+      this.prisma.signUpRequest.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: {
+          created_at: 'desc',
+        },
+        include: {
+          reviewed_by: {
+            select: {
+              id: true,
+              email: true,
+              full_name: true,
+            },
+          },
+        },
+      }),
+      this.prisma.signUpRequest.count({ where }),
+    ]);
+
+    return {
+      requests,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.ceil(total / limit),
+      },
+    };
+  }
+
+  async getSignUpRequestById(requestId: string) {
+    const request = await this.prisma.signUpRequest.findUnique({
+      where: { id: requestId },
+      include: {
+        reviewed_by: {
+          select: {
+            id: true,
+            email: true,
+            full_name: true,
+          },
+        },
+      },
+    });
+
+    if (!request) {
+      throw new NotFoundException(`Signup request with ID ${requestId} not found`);
+    }
+
+    return request;
+  }
+
+  async approveSignUpRequest(requestId: string, approveDto: ApproveSignUpRequestDto, adminId: string) {
+    const { status, reason_note } = approveDto;
+
+    const request = await this.prisma.signUpRequest.findUnique({
+      where: { id: requestId },
+    });
+
+    if (!request) {
+      throw new NotFoundException(`Signup request with ID ${requestId} not found`);
+    }
+
+    if (request.status !== 'pending') {
+      throw new BadRequestException(`Signup request is already ${request.status}`);
+    }
+
+    // Validate reason_note for rejected and need_more_info
+    if ((status === 'rejected' || status === 'need_more_info') && !reason_note) {
+      throw new BadRequestException('Reason note is required for rejected or need_more_info status');
+    }
+
+    if (status === 'approved') {
+      // Check if user already exists
+      const existingUser = await this.prisma.profile.findUnique({
+        where: { email: request.email },
+      });
+
+      if (existingUser) {
+        throw new ConflictException('User with this email already exists');
+      }
+
+      // Generate OTP
+      const otp = this.emailService.generateOTP();
+      const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Create user
+      const user = await this.prisma.profile.create({
+        data: {
+          email: request.email,
+          password_hash: request.password_hash,
+          full_name: request.full_name,
+          role: request.role,
+          phone: request.phone,
+          email_verification_otp: otp,
+          otp_expires_at,
+          email_verified: false,
+        },
+      });
+
+      // Update signup request with user_id and status
+      await this.prisma.signUpRequest.update({
+        where: { id: requestId },
+        data: {
+          status: 'approved',
+          user_id: user.id,
+          reviewed_by_id: adminId,
+          reviewed_at: new Date(),
+          reason_note: reason_note || null,
+        },
+      });
+
+      // Send OTP email
+      await this.emailService.sendOTP(request.email, otp, request.full_name || undefined);
+
+      return {
+        message: 'Signup request approved and user created successfully',
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+        },
+      };
+    } else {
+      // Update status for rejected or need_more_info
+      await this.prisma.signUpRequest.update({
+        where: { id: requestId },
+        data: {
+          status,
+          reviewed_by_id: adminId,
+          reviewed_at: new Date(),
+          reason_note: reason_note || null,
+        },
+      });
+
+      return {
+        message: `Signup request ${status} successfully`,
+      };
+    }
+  }
+
+  async createUser(createUserDto: CreateUserDto) {
+    const { email, password, full_name, role, phone } = createUserDto;
+
+    // Check if user already exists
+    const existingUser = await this.prisma.profile.findUnique({
+      where: { email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    // Check if phone number is already in use (if provided)
+    if (phone) {
+      const existingPhoneUser = await this.prisma.profile.findFirst({
+        where: { phone },
+      });
+
+      if (existingPhoneUser) {
+        throw new ConflictException('User with this phone number already exists');
+      }
+    }
+
+    // Hash password
+    const password_hash = await bcrypt.hash(password, 10);
+
+    // Generate OTP
+    const otp = this.emailService.generateOTP();
+    const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Create user
+    const user = await this.prisma.profile.create({
+      data: {
+        email,
+        password_hash,
+        full_name,
+        role,
+        phone,
+        email_verification_otp: otp,
+        otp_expires_at,
+        email_verified: false,
+      },
+    });
+
+    // Send OTP email
+    await this.emailService.sendOTP(email, otp, full_name);
+
+    return {
+      message: 'User created successfully',
+      user: {
+        id: user.id,
+        email: user.email,
+        full_name: user.full_name,
+        role: user.role,
+        phone: user.phone,
+      },
     };
   }
 }
