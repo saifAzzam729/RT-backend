@@ -15,11 +15,15 @@ import { InviteSecondaryAccountDto } from './dto/invite-secondary-account.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { TendersService } from '../tenders/tenders.service';
 
 @ApiTags('organizations')
 @Controller('organizations')
 export class OrganizationsController {
-  constructor(private organizationsService: OrganizationsService) {}
+  constructor(
+    private organizationsService: OrganizationsService,
+    private tendersService: TendersService,
+  ) {}
 
   @Public()
   @Get()
@@ -141,6 +145,26 @@ export class OrganizationsController {
     @CurrentUser() user: CurrentUserData,
   ) {
     return this.organizationsService.acceptInvitation(token, user.id);
+  }
+
+  @Get('my/tenders')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get tenders for current user' })
+  @ApiResponse({ status: 200, description: 'List of tenders for the current user' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getMyTenders(@CurrentUser() user: CurrentUserData) {
+    return this.tendersService.findByUserId(user.id);
+  }
+
+  @Get('tenders/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get a tender by ID' })
+  @ApiParam({ name: 'id', description: 'Tender ID' })
+  @ApiResponse({ status: 200, description: 'Tender details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tender not found' })
+  getTenderById(@Param('id') id: string) {
+    return this.tendersService.findOne(id, false);
   }
 }
 

@@ -56,6 +56,17 @@ export class JobsController {
     return this.jobsService.findOne(id, true);
   }
 
+  @Get('id/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get a job by ID (authenticated)' })
+  @ApiParam({ name: 'id', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  findOneAuthenticated(@Param('id') id: string) {
+    return this.jobsService.findOne(id, false);
+  }
+
   @Get('company/:companyId')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get jobs by company' })
@@ -64,6 +75,15 @@ export class JobsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findByCompany(@Param('companyId') companyId: string) {
     return this.jobsService.findByCompany(companyId);
+  }
+
+  @Get('my')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get jobs for current user' })
+  @ApiResponse({ status: 200, description: 'List of jobs for the current user' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findMy(@CurrentUser() user: CurrentUserData) {
+    return this.jobsService.findByUserId(user.id);
   }
 
   @Patch(':id')

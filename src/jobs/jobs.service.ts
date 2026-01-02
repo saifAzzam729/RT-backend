@@ -15,29 +15,25 @@ export class JobsService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, createJobDto: CreateJobDto) {
-    const { company_id, ...jobData } = createJobDto;
+    const { userId: dtoUserId, ...jobData } = createJobDto;
 
-    // Verify company ownership
-    const company = await this.prisma.company.findUnique({
-      where: { id: company_id },
+    // Verify that the userId in DTO matches the authenticated user
+    if (dtoUserId !== userId) {
+      throw new ForbiddenException('You can only create jobs for yourself');
+    }
+
+    // Verify user exists
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
     });
 
-    if (!company) {
-      throw new NotFoundException('Company not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    if (company.user_id !== userId) {
-      throw new ForbiddenException('You do not have permission to post jobs for this company');
-    }
-
-    // Check if company is approved
-    if (!company.approved) {
-      throw new ForbiddenException('Company must be approved before posting jobs');
-    }
-
-    // Check free post limit
+    // Check free post limit based on user_id
     const jobCount = await this.prisma.job.count({
-      where: { company_id },
+      where: { user_id: userId },
     });
 
     if (jobCount >= 2) {
@@ -47,7 +43,7 @@ export class JobsService {
     const job = await this.prisma.job.create({
       data: {
         ...jobData,
-        company_id,
+        user_id: userId,
       },
       include: {
         company: {
@@ -66,7 +62,9 @@ export class JobsService {
 
   async findAll(queryDto: QueryJobsDto) {
     const where: Prisma.JobWhereInput = {
-      status: 'open',
+      status: {
+        in: ['open', 'active'],
+      },
     };
 
     if (queryDto.search) {
@@ -84,7 +82,11 @@ export class JobsService {
       where.location = { contains: queryDto.location, mode: 'insensitive' };
     }
 
-    return this.prisma.job.findMany({
+    if (queryDto.userId) {
+      where.user_id = queryDto.userId;
+    }
+
+    const jobs = await this.prisma.job.findMany({
       where,
       include: {
         company: {
@@ -95,10 +97,32 @@ export class JobsService {
             location: true,
           },
         },
+        user: {
+          include: {
+            signup_request: {
+              select: {
+                role: true,
+              },
+            },
+          },
+        },
       },
       orderBy: {
         created_at: 'desc',
       },
+    });
+
+    // Map the results to include the role from signup request
+    return jobs.map((job) => {
+      const { user, ...jobData } = job;
+      return {
+        ...jobData,
+        user_role: user?.signup_request?.role || user?.role || null,
+        user: user ? {
+          id: user.id,
+          email: user.email,
+        } : null,
+      };
     });
   }
 
@@ -136,8 +160,47 @@ export class JobsService {
   }
 
   async findByCompany(companyId: string) {
+    // Get the company to find its user_id
+    const company = await this.prisma.company.findUnique({
+      where: { id: companyId },
+      select: { user_id: true },
+    });
+
+    if (!company) {
+      throw new NotFoundException('Company not found');
+    }
+
     return this.prisma.job.findMany({
-      where: { company_id: companyId },
+      where: { user_id: company.user_id },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            logo_url: true,
+            location: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
+
+  async findByUserId(userId: string) {
+    return this.prisma.job.findMany({
+      where: { user_id: userId },
+      include: {
+        company: {
+          select: {
+            id: true,
+            name: true,
+            logo_url: true,
+            location: true,
+          },
+        },
+      },
       orderBy: {
         created_at: 'desc',
       },
@@ -147,12 +210,8 @@ export class JobsService {
   async update(id: string, userId: string, updateJobDto: UpdateJobDto) {
     const job = await this.findOne(id);
 
-    // Verify company ownership
-    const company = await this.prisma.company.findUnique({
-      where: { id: job.company_id },
-    });
-
-    if (!company || company.user_id !== userId) {
+    // Verify user ownership
+    if (job.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this job');
     }
 
@@ -177,12 +236,8 @@ export class JobsService {
   async remove(id: string, userId: string) {
     const job = await this.findOne(id);
 
-    // Verify company ownership
-    const company = await this.prisma.company.findUnique({
-      where: { id: job.company_id },
-    });
-
-    if (!company || company.user_id !== userId) {
+    // Verify user ownership
+    if (job.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to delete this job');
     }
 

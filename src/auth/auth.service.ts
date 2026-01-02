@@ -34,18 +34,6 @@ export class AuthService {
       throw new ConflictException('User with this email already exists');
     }
 
-    // Check if there's a pending signup request for this email
-    const existingRequest = await this.prisma.signUpRequest.findFirst({
-      where: {
-        email,
-        status: 'pending',
-      },
-    });
-
-    if (existingRequest) {
-      throw new ConflictException('A signup request with this email is already pending approval');
-    }
-
     // Check if phone number is already in use (if provided)
     if (phone) {
       const existingPhoneUser = await this.prisma.profile.findFirst({
@@ -60,7 +48,49 @@ export class AuthService {
     // Hash password
     const password_hash = await bcrypt.hash(password, 10);
 
-    // For company, organization, and user roles, create a signup request that needs admin approval
+    // For role "user", create user directly and send OTP (no admin approval needed)
+    if (role === 'user') {
+      // Generate OTP
+      const otp = this.emailService.generateOTP();
+      const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+      // Create user directly
+      const user = await this.prisma.profile.create({
+        data: {
+          email,
+          password_hash,
+          full_name,
+          role,
+          phone,
+          email_verification_otp: otp,
+          otp_expires_at,
+          email_verified: false,
+        },
+      });
+
+      // Send OTP email
+      await this.emailService.sendOTP(email, otp, full_name);
+
+      return {
+        message: 'User created successfully. Please check your email for the verification code.',
+        userId: user.id,
+        email: user.email,
+      };
+    }
+
+    // For company and organization roles, create a signup request that needs admin approval
+    // Check if there's a pending signup request for this email
+    const existingRequest = await this.prisma.signUpRequest.findFirst({
+      where: {
+        email,
+        status: 'pending',
+      },
+    });
+
+    if (existingRequest) {
+      throw new ConflictException('A signup request with this email is already pending approval');
+    }
+
     // Create signup request
     const signupRequest = await this.prisma.signUpRequest.create({
       data: {

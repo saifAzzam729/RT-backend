@@ -74,6 +74,46 @@ export class EmailService {
             },
           });
           this.logger.log('Email service configured with Mailgun');
+        } else if (host.includes('office365.com') || host.includes('outlook.com') || host.includes('live.com') || host.includes('hotmail.com')) {
+          // Office 365 / Outlook / Microsoft 365 SMTP configuration
+          // Many GoDaddy email accounts are hosted on Office 365
+          this.transporter = nodemailer.createTransport({
+            host: smtpConfig.host || 'smtp.office365.com',
+            port: smtpConfig.port || 587,
+            secure: false, // Use TLS (STARTTLS)
+            auth: {
+              user: smtpConfig.auth.user, // Full email address (e.g., info@yourdomain.com)
+              pass: smtpConfig.auth.pass, // Email password or app password
+            },
+            tls: {
+              ciphers: 'SSLv3',
+              rejectUnauthorized: false,
+            },
+          });
+          this.logger.log(`Email service configured with Office 365/Outlook SMTP (${smtpConfig.host || 'smtp.office365.com'}:${smtpConfig.port || 587})`);
+        } else if (host.includes('secureserver.net') || host.includes('godaddy.com')) {
+          // GoDaddy SMTP configuration (traditional GoDaddy email)
+          // GoDaddy uses smtpout.secureserver.net or smtp.secureserver.net
+          // Port 465 for SSL or 587 for TLS
+          // Note: If you see Outlook errors, your GoDaddy email may be on Office 365
+          // In that case, use smtp.office365.com as SMTP_HOST instead
+          const port = smtpConfig.port || 587;
+          const secure = port === 465;
+          
+          this.transporter = nodemailer.createTransport({
+            host: smtpConfig.host,
+            port: port,
+            secure: secure, // true for 465, false for other ports
+            auth: {
+              user: smtpConfig.auth.user, // Full email address
+              pass: smtpConfig.auth.pass, // Email password
+            },
+            tls: {
+              // Do not fail on invalid certificates
+              rejectUnauthorized: false,
+            },
+          });
+          this.logger.log(`Email service configured with GoDaddy SMTP (${smtpConfig.host}:${port})`);
         } else {
           // Generic SMTP configuration
           this.transporter = nodemailer.createTransport({
@@ -136,11 +176,17 @@ export class EmailService {
       if (error.code === 'EAUTH') {
         this.logger.error(
           'Authentication failed. Please check:\n' +
-          '1. SMTP credentials are correct\n' +
+          '1. SMTP credentials are correct (username and password)\n' +
           '2. For Gmail: Use App Password (not regular password)\n' +
-          '3. For SendGrid: Use API key in SMTP_PASSWORD\n' +
-          '4. For Resend: Use API key in SMTP_PASSWORD\n' +
-          '5. Check EMAIL_SETUP.md for provider-specific instructions'
+          '3. For Office 365/Outlook (GoDaddy hosted on Office 365):\n' +
+          '   - Use SMTP_HOST=smtp.office365.com\n' +
+          '   - Use SMTP_PORT=587\n' +
+          '   - Use full email address in SMTP_USER\n' +
+          '   - Use email password (or app password if 2FA enabled) in SMTP_PASSWORD\n' +
+          '4. For GoDaddy (traditional): Use full email address in SMTP_USER and email password in SMTP_PASSWORD\n' +
+          '5. For SendGrid: Use API key in SMTP_PASSWORD\n' +
+          '6. For Resend: Use API key in SMTP_PASSWORD\n' +
+          '7. If you see Outlook errors with GoDaddy email, your account is on Office 365 - use Office 365 SMTP settings'
         );
       }
       

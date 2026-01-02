@@ -104,6 +104,8 @@ model Profile {
   // Relations
   organizations              Organization[]
   companies                  Company[]
+  jobs                       Job[]
+  tenders                  Tender[]
   job_applications           JobApplication[]
   tender_applications        TenderApplication[]
   analytics                  Analytics[]
@@ -212,7 +214,8 @@ model Company {
 // Tenders table (posted by organizations)
 model Tender {
   id                      String       @id @default(uuid())
-  organization_id         String
+  user_id                 String
+  organization_id         String?
   title                   String
   type                    String?
   sector                  Sector?
@@ -233,9 +236,11 @@ model Tender {
   updated_at              DateTime     @updatedAt
 
   // Relations
-  organization Organization        @relation(fields: [organization_id], references: [id], onDelete: Cascade)
+  user         Profile            @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  organization Organization?      @relation(fields: [organization_id], references: [id], onDelete: Cascade)
   applications TenderApplication[]
 
+  @@index([user_id])
   @@index([organization_id])
   @@index([status])
   @@index([sector])
@@ -245,7 +250,8 @@ model Tender {
 // Jobs table (posted by companies)
 model Job {
   id                    String    @id @default(uuid())
-  company_id            String
+  user_id               String
+  company_id            String?
   title                 String
   type                  String?
   sector                Sector?
@@ -270,9 +276,11 @@ model Job {
   updated_at            DateTime  @updatedAt
 
   // Relations
-  company      Company          @relation(fields: [company_id], references: [id], onDelete: Cascade)
+  user         Profile         @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  company      Company?        @relation(fields: [company_id], references: [id], onDelete: Cascade)
   applications JobApplication[]
 
+  @@index([user_id])
   @@index([company_id])
   @@index([status])
   @@index([sector])

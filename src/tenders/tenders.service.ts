@@ -15,29 +15,25 @@ export class TendersService {
   constructor(private prisma: PrismaService) {}
 
   async create(userId: string, createTenderDto: CreateTenderDto) {
-    const { organization_id, ...tenderData } = createTenderDto;
+    const { userId: dtoUserId, ...tenderData } = createTenderDto;
 
-    // Verify organization ownership
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: organization_id },
+    // Verify that the userId in DTO matches the authenticated user
+    if (dtoUserId !== userId) {
+      throw new ForbiddenException('You can only create tenders for yourself');
+    }
+
+    // Verify user exists
+    const user = await this.prisma.profile.findUnique({
+      where: { id: userId },
     });
 
-    if (!organization) {
-      throw new NotFoundException('Organization not found');
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
-    if (organization.user_id !== userId) {
-      throw new ForbiddenException('You do not have permission to post tenders for this organization');
-    }
-
-    // Check if organization is approved
-    if (!organization.approved) {
-      throw new ForbiddenException('Organization must be approved before posting tenders');
-    }
-
-    // Check free post limit
+    // Check free post limit based on user_id
     const tenderCount = await this.prisma.tender.count({
-      where: { organization_id },
+      where: { user_id: userId },
     });
 
     if (tenderCount >= 2) {
@@ -47,7 +43,7 @@ export class TendersService {
     const tender = await this.prisma.tender.create({
       data: {
         ...tenderData,
-        organization_id,
+        user_id: userId,
         deadline: tenderData.deadline ? new Date(tenderData.deadline) : null,
       },
       include: {
@@ -67,7 +63,9 @@ export class TendersService {
 
   async findAll(queryDto: QueryTendersDto) {
     const where: Prisma.TenderWhereInput = {
-      status: 'open',
+      status: {
+        in: ['open', 'active', 'closing_soon'],
+      },
     };
 
     if (queryDto.search) {
@@ -83,6 +81,10 @@ export class TendersService {
 
     if (queryDto.location) {
       where.location = { contains: queryDto.location, mode: 'insensitive' };
+    }
+
+    if (queryDto.userId) {
+      where.user_id = queryDto.userId;
     }
 
     return this.prisma.tender.findMany({
@@ -137,8 +139,47 @@ export class TendersService {
   }
 
   async findByOrganization(organizationId: string) {
+    // Get the organization to find its user_id
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { user_id: true },
+    });
+
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
+    }
+
     return this.prisma.tender.findMany({
-      where: { organization_id: organizationId },
+      where: { user_id: organization.user_id },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            logo_url: true,
+            location: true,
+          },
+        },
+      },
+      orderBy: {
+        created_at: 'desc',
+      },
+    });
+  }
+
+  async findByUserId(userId: string) {
+    return this.prisma.tender.findMany({
+      where: { user_id: userId },
+      include: {
+        organization: {
+          select: {
+            id: true,
+            name: true,
+            logo_url: true,
+            location: true,
+          },
+        },
+      },
       orderBy: {
         created_at: 'desc',
       },
@@ -148,12 +189,8 @@ export class TendersService {
   async update(id: string, userId: string, updateTenderDto: UpdateTenderDto) {
     const tender = await this.findOne(id);
 
-    // Verify organization ownership
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: tender.organization_id },
-    });
-
-    if (!organization || organization.user_id !== userId) {
+    // Verify user ownership
+    if (tender.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this tender');
     }
 
@@ -183,12 +220,8 @@ export class TendersService {
   async remove(id: string, userId: string) {
     const tender = await this.findOne(id);
 
-    // Verify organization ownership
-    const organization = await this.prisma.organization.findUnique({
-      where: { id: tender.organization_id },
-    });
-
-    if (!organization || organization.user_id !== userId) {
+    // Verify user ownership
+    if (tender.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to delete this tender');
     }
 

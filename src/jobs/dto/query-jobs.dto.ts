@@ -25,6 +25,14 @@ export class QueryJobsDto {
   @IsOptional()
   @IsString()
   location?: string;
+
+  @ApiPropertyOptional({
+    description: 'Filter by user ID',
+    example: 'user-uuid-here',
+  })
+  @IsOptional()
+  @IsString()
+  userId?: string;
 }
 
 

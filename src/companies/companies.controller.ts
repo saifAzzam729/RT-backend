@@ -14,11 +14,15 @@ import { UpdateCompanyDto } from './dto/update-company.dto';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import type { CurrentUserData } from '../auth/decorators/current-user.decorator';
 import { Public } from '../auth/decorators/public.decorator';
+import { JobsService } from '../jobs/jobs.service';
 
 @ApiTags('companies')
 @Controller('companies')
 export class CompaniesController {
-  constructor(private companiesService: CompaniesService) {}
+  constructor(
+    private companiesService: CompaniesService,
+    private jobsService: JobsService,
+  ) {}
 
   @Public()
   @Get()
@@ -96,6 +100,26 @@ export class CompaniesController {
   @ApiResponse({ status: 404, description: 'Company not found' })
   getQuota(@Param('id') id: string) {
     return this.companiesService.getQuota(id);
+  }
+
+  @Get('my/jobs')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get jobs for current user' })
+  @ApiResponse({ status: 200, description: 'List of jobs for the current user' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  getMyJobs(@CurrentUser() user: CurrentUserData) {
+    return this.jobsService.findByUserId(user.id);
+  }
+
+  @Get('jobs/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get a job by ID' })
+  @ApiParam({ name: 'id', description: 'Job ID' })
+  @ApiResponse({ status: 200, description: 'Job details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Job not found' })
+  getJobById(@Param('id') id: string) {
+    return this.jobsService.findOne(id, false);
   }
 }
 

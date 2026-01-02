@@ -5,12 +5,12 @@ import { Type } from 'class-transformer';
 
 export class CreateJobDto {
   @ApiProperty({
-    description: 'ID of the company posting the job',
-    example: 'clx1234567890',
+    description: 'ID of the user posting the job',
+    example: '4894dac6-170a-476f-bab5-7bf7d1174d0d',
   })
   @IsString()
   @IsNotEmpty()
-  company_id: string;
+  userId: string;
 
   @ApiProperty({
     description: 'Job title',

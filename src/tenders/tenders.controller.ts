@@ -56,6 +56,17 @@ export class TendersController {
     return this.tendersService.findOne(id, true);
   }
 
+  @Get('id/:id')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get a tender by ID (authenticated)' })
+  @ApiParam({ name: 'id', description: 'Tender ID' })
+  @ApiResponse({ status: 200, description: 'Tender details' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Tender not found' })
+  findOneAuthenticated(@Param('id') id: string) {
+    return this.tendersService.findOne(id, false);
+  }
+
   @Get('organization/:organizationId')
   @ApiBearerAuth('JWT-auth')
   @ApiOperation({ summary: 'Get tenders by organization' })
@@ -64,6 +75,15 @@ export class TendersController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findByOrganization(@Param('organizationId') organizationId: string) {
     return this.tendersService.findByOrganization(organizationId);
+  }
+
+  @Get('my')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Get tenders for current user' })
+  @ApiResponse({ status: 200, description: 'List of tenders for the current user' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  findMy(@CurrentUser() user: CurrentUserData) {
+    return this.tendersService.findByUserId(user.id);
   }
 
   @Patch(':id')

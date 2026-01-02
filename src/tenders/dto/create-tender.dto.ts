@@ -4,12 +4,12 @@ import { TenderStatus, Sector } from '@prisma/client';
 
 export class CreateTenderDto {
   @ApiProperty({
-    description: 'ID of the organization posting the tender',
-    example: 'clx1234567890',
+    description: 'ID of the user posting the tender',
+    example: '4894dac6-170a-476f-bab5-7bf7d1174d0d',
   })
   @IsString()
   @IsNotEmpty()
-  organization_id: string;
+  userId: string;
 
   @ApiProperty({
     description: 'Tender title',

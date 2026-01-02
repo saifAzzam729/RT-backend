@@ -16,7 +16,7 @@ export class ApplicationsService {
 
   // Job Applications
   async applyToJob(userId: string, jobId: string, applyDto: ApplyToJobDto) {
-    // Check if job exists and is open
+    // Check if job exists and is accepting applications
     const job = await this.prisma.job.findUnique({
       where: { id: jobId },
     });
@@ -25,7 +25,8 @@ export class ApplicationsService {
       throw new NotFoundException('Job not found');
     }
 
-    if (job.status !== 'open') {
+    // Allow applications for 'open' and 'active' statuses (same as shown in listings)
+    if (job.status !== 'open' && job.status !== 'active') {
       throw new ForbiddenException('This job is not accepting applications');
     }
 
@@ -158,8 +159,8 @@ export class ApplicationsService {
       throw new NotFoundException('Application not found');
     }
 
-    // Verify company ownership
-    if (application.job.company.user_id !== userId) {
+    // Verify job ownership
+    if (application.job.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this application');
     }
 
@@ -171,7 +172,7 @@ export class ApplicationsService {
 
   // Tender Applications
   async applyToTender(userId: string, tenderId: string, applyDto: ApplyToTenderDto) {
-    // Check if tender exists and is open
+    // Check if tender exists and is accepting applications
     const tender = await this.prisma.tender.findUnique({
       where: { id: tenderId },
     });
@@ -180,7 +181,8 @@ export class ApplicationsService {
       throw new NotFoundException('Tender not found');
     }
 
-    if (tender.status !== 'open') {
+    // Allow applications for 'open', 'active', and 'closing_soon' statuses (same as shown in listings)
+    if (tender.status !== 'open' && tender.status !== 'active' && tender.status !== 'closing_soon') {
       throw new ForbiddenException('This tender is not accepting applications');
     }
 
@@ -313,8 +315,8 @@ export class ApplicationsService {
       throw new NotFoundException('Application not found');
     }
 
-    // Verify organization ownership
-    if (application.tender.organization.user_id !== userId) {
+    // Verify tender ownership
+    if (application.tender.user_id !== userId) {
       throw new ForbiddenException('You do not have permission to update this application');
     }
 
@@ -455,7 +457,7 @@ export class ApplicationsService {
 
     if (application) {
       // Check authorization
-      if (userRole !== 'admin' && application.user_id !== userId && application.job.company.user_id !== userId) {
+      if (userRole !== 'admin' && application.user_id !== userId && application.job.user_id !== userId) {
         throw new ForbiddenException('You do not have permission to view this application');
       }
 
@@ -492,7 +494,7 @@ export class ApplicationsService {
 
     if (tenderApp) {
       // Check authorization
-      if (userRole !== 'admin' && tenderApp.user_id !== userId && tenderApp.tender.organization.user_id !== userId) {
+      if (userRole !== 'admin' && tenderApp.user_id !== userId && tenderApp.tender.user_id !== userId) {
         throw new ForbiddenException('You do not have permission to view this application');
       }
 
@@ -525,10 +527,10 @@ export class ApplicationsService {
     });
 
     if (application) {
-      // Check authorization: user can delete their own, or company owner/admin can delete
+      // Check authorization: user can delete their own, or job owner/admin can delete
       if (
         application.user_id !== userId &&
-        application.job.company.user_id !== userId &&
+        application.job.user_id !== userId &&
         userRole !== 'admin'
       ) {
         throw new ForbiddenException('You do not have permission to delete this application');
@@ -553,10 +555,10 @@ export class ApplicationsService {
     });
 
     if (tenderApp) {
-      // Check authorization: user can delete their own, or organization owner/admin can delete
+      // Check authorization: user can delete their own, or tender owner/admin can delete
       if (
         tenderApp.user_id !== userId &&
-        tenderApp.tender.organization.user_id !== userId &&
+        tenderApp.tender.user_id !== userId &&
         userRole !== 'admin'
       ) {
         throw new ForbiddenException('You do not have permission to delete this application');
