@@ -30,6 +30,26 @@ export class EmailService {
     );
   }
 
+  /**
+   * Extracts email address from a potentially formatted string
+   * Handles cases like "Name <email@example.com>" or just "email@example.com"
+   */
+  private extractEmailAddress(input: string): string {
+    if (!input) return '';
+    
+    // Remove whitespace
+    input = input.trim();
+    
+    // If it's already in format "Name <email@example.com>", extract the email
+    const match = input.match(/<([^>]+)>/);
+    if (match) {
+      return match[1].trim();
+    }
+    
+    // Otherwise, assume it's just the email address
+    return input;
+  }
+
   async sendOTP(email: string, otp: string, fullName?: string) {
     if (!this.transporter) {
       this.logger.warn(`[DEV MODE] OTP for ${email}: ${otp}`);
@@ -39,9 +59,19 @@ export class EmailService {
     // Use the authenticated user's email as the sender to avoid SendAsDenied errors
     const smtp = this.configService.get('email.smtp');
     const authUser = smtp?.auth?.user;
-    const from = authUser 
-      ? `RT-SYR <${authUser}>`
-      : this.configService.get<string>('email.from') || 'RT-SYR <info@rt-syr.com>';
+    
+    let from: string;
+    if (authUser) {
+      const emailAddress = this.extractEmailAddress(authUser);
+      if (emailAddress && emailAddress.includes('@')) {
+        from = `RT-SYR <${emailAddress}>`;
+      } else {
+        this.logger.warn(`Invalid SMTP_USER format: ${authUser}. Using fallback.`);
+        from = this.configService.get<string>('email.from') || 'RT-SYR <info@rt-syr.com>';
+      }
+    } else {
+      from = this.configService.get<string>('email.from') || 'RT-SYR <info@rt-syr.com>';
+    }
 
     try {
       await this.transporter.sendMail({
