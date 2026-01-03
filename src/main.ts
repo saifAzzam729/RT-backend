@@ -34,22 +34,22 @@ async function bootstrap() {
       ]
     : [frontendUrl]; // Production: allow only your frontend domain
 
-  app.enableCors({
-    origin: (origin, callback) => {
-      // Allow requests with no origin (curl, mobile apps)
-      if (!origin) return callback(null, true);
+  // app.enableCors({
+  //   origin: (origin, callback) => {
+  //     // Allow requests with no origin (curl, mobile apps)
+  //     if (!origin) return callback(null, true);
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.warn(`CORS blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  });
+  //     if (allowedOrigins.includes(origin)) {
+  //       callback(null, true);
+  //     } else {
+  //       console.warn(`CORS blocked origin: ${origin}`);
+  //       callback(new Error('Not allowed by CORS'));
+  //     }
+  //   },
+  //   credentials: true,
+  //   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  //   allowedHeaders: ['Content-Type', 'Authorization'],
+  // });
 
   // Global validation
   app.useGlobalPipes(
