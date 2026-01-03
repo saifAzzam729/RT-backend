@@ -98,7 +98,8 @@ SMTP_PORT=587
 SMTP_SECURE=false
 SMTP_USER="your-email@example.com"
 SMTP_PASSWORD="your-password"
-EMAIL_FROM="RT-SYR <noreply@rt-syr.com>"
+# EMAIL_FROM is optional - defaults to using SMTP_USER as sender
+# EMAIL_FROM="RT-SYR <your-email@example.com>"
 
 # Supabase Storage
 SUPABASE_URL="https://your-project.supabase.co"

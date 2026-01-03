@@ -31,6 +31,11 @@ export class TendersService {
       throw new NotFoundException('User not found');
     }
 
+    // Check if user is approved by admin (required for posting tenders)
+    if (!user.approved) {
+      throw new ForbiddenException('Your account has not been approved by admin yet. You cannot post tenders until your account is approved.');
+    }
+
     // Check free post limit based on user_id
     const tenderCount = await this.prisma.tender.count({
       where: { user_id: userId },

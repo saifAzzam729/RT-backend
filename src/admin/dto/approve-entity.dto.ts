@@ -4,11 +4,11 @@ import { ApiProperty } from '@nestjs/swagger';
 export class ApproveEntityDto {
   @ApiProperty({
     description: 'Type of entity to approve',
-    enum: ['organization', 'company'],
+    enum: ['organization', 'company', 'user'],
     example: 'organization',
   })
-  @IsEnum(['organization', 'company'])
-  entityType: 'organization' | 'company';
+  @IsEnum(['organization', 'company', 'user'])
+  entityType: 'organization' | 'company' | 'user';
 
   @ApiProperty({
     description: 'ID of the entity to approve',

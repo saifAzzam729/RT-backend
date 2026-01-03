@@ -54,13 +54,30 @@ export class AdminService {
       return {
         message: `Company ${approved ? 'approved' : 'unapproved'} successfully`,
       };
+    } else if (entityType === 'user') {
+      const user = await this.prisma.profile.findUnique({
+        where: { id: entityId },
+      });
+
+      if (!user) {
+        throw new NotFoundException('User not found');
+      }
+
+      await this.prisma.profile.update({
+        where: { id: entityId },
+        data: { approved },
+      });
+
+      return {
+        message: `User ${approved ? 'approved' : 'unapproved'} successfully`,
+      };
     }
 
     throw new BadRequestException('Invalid entity type');
   }
 
   async getPendingApprovals() {
-    const [pendingOrganizations, pendingCompanies] = await Promise.all([
+    const [pendingOrganizations, pendingCompanies, pendingUsers] = await Promise.all([
       this.prisma.organization.findMany({
         where: { approved: false },
         include: {
@@ -91,11 +108,28 @@ export class AdminService {
           created_at: 'desc',
         },
       }),
+      this.prisma.profile.findMany({
+        where: { 
+          approved: false,
+          email_verified: true, // Only show verified users who are pending approval
+        },
+        select: {
+          id: true,
+          email: true,
+          full_name: true,
+          role: true,
+          created_at: true,
+        },
+        orderBy: {
+          created_at: 'desc',
+        },
+      }),
     ]);
 
     return {
       organizations: pendingOrganizations,
       companies: pendingCompanies,
+      users: pendingUsers,
     };
   }
 
@@ -270,6 +304,7 @@ export class AdminService {
           avatar_url: true,
           bio: true,
           email_verified: true,
+          approved: true,
           plan_status: true,
           plan_id: true,
           plan_expires_at: true,
@@ -306,6 +341,7 @@ export class AdminService {
         avatar_url: true,
         bio: true,
         email_verified: true,
+        approved: true,
         plan_status: true,
         plan_id: true,
         plan_expires_at: true,
@@ -377,6 +413,7 @@ export class AdminService {
         ...(updateDto.bio !== undefined && { bio: updateDto.bio }),
         ...(updateDto.email_verified !== undefined && { email_verified: updateDto.email_verified }),
         ...(updateDto.plan_status && { plan_status: updateDto.plan_status }),
+        ...(updateDto.approved !== undefined && { approved: updateDto.approved }),
       },
       select: {
         id: true,
@@ -387,6 +424,7 @@ export class AdminService {
         avatar_url: true,
         bio: true,
         email_verified: true,
+        approved: true,
         plan_status: true,
         plan_id: true,
         plan_expires_at: true,

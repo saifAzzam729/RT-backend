@@ -48,67 +48,33 @@ export class AuthService {
     // Hash password
     const password_hash = await bcrypt.hash(password, 10);
 
-    // For role "user", create user directly and send OTP (no admin approval needed)
-    if (role === 'user') {
-      // Generate OTP
-      const otp = this.emailService.generateOTP();
-      const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+    // Generate OTP for all roles (unified signup flow)
+    const otp = this.emailService.generateOTP();
+    const otp_expires_at = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
 
-      // Create user directly
-      const user = await this.prisma.profile.create({
-        data: {
-          email,
-          password_hash,
-          full_name,
-          role,
-          phone,
-          email_verification_otp: otp,
-          otp_expires_at,
-          email_verified: false,
-        },
-      });
-
-      // Send OTP email
-      await this.emailService.sendOTP(email, otp, full_name);
-
-      return {
-        message: 'User created successfully. Please check your email for the verification code.',
-        userId: user.id,
-        email: user.email,
-      };
-    }
-
-    // For company and organization roles, create a signup request that needs admin approval
-    // Check if there's a pending signup request for this email
-    const existingRequest = await this.prisma.signUpRequest.findFirst({
-      where: {
-        email,
-        status: 'pending',
-      },
-    });
-
-    if (existingRequest) {
-      throw new ConflictException('A signup request with this email is already pending approval');
-    }
-
-    // Create signup request
-    const signupRequest = await this.prisma.signUpRequest.create({
+    // Create user directly for all roles (unified flow: Sign up -> OTP -> Login)
+    // Approval will be handled separately by admin
+    const user = await this.prisma.profile.create({
       data: {
         email,
         password_hash,
         full_name,
         role,
         phone,
-        drive_link,
-        commercial_file_url,
-        status: 'pending',
+        email_verification_otp: otp,
+        otp_expires_at,
+        email_verified: false,
+        approved: false, // Default to false, admin needs to approve for posting jobs/tenders
       },
     });
 
+    // Send OTP email
+    await this.emailService.sendOTP(email, otp, full_name);
+
     return {
-      message: 'Signup request submitted successfully. Please wait for admin approval.',
-      requestId: signupRequest.id,
-      email: signupRequest.email,
+      message: 'User created successfully. Please check your email for the verification code.',
+      userId: user.id,
+      email: user.email,
     };
   }
 

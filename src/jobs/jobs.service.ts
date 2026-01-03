@@ -31,6 +31,11 @@ export class JobsService {
       throw new NotFoundException('User not found');
     }
 
+    // Check if user is approved by admin (required for posting jobs)
+    if (!user.approved) {
+      throw new ForbiddenException('Your account has not been approved by admin yet. You cannot post jobs until your account is approved.');
+    }
+
     // Check free post limit based on user_id
     const jobCount = await this.prisma.job.count({
       where: { user_id: userId },

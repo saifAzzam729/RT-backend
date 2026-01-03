@@ -68,7 +68,17 @@ export class UpdateUserDto {
   @IsOptional()
   @IsEnum(PlanStatus)
   plan_status?: PlanStatus;
+
+  @ApiPropertyOptional({
+    description: 'User approval status (required for posting jobs/tenders)',
+    example: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  approved?: boolean;
 }
+
+
 
 
 
