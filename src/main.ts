@@ -10,62 +10,35 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   const configService = app.get(ConfigService);
-  
-  // Serve static files from uploads directory (only if directory exists)
-  // In serverless environments like Vercel, this directory may not exist
-  try {
-    const storagePath = configService.get<string>('storage.path') || join(process.cwd(), 'uploads');
-    // Resolve absolute path if relative
-    const absoluteStoragePath = storagePath.startsWith('/') 
-      ? storagePath 
-      : join(process.cwd(), storagePath);
-    
-    // Only serve static assets if directory exists
-    if (existsSync(absoluteStoragePath)) {
-      app.useStaticAssets(absoluteStoragePath, {
-        prefix: '/api/storage/',
-      });
-    }
-  } catch (error) {
-    // Silently fail if static assets can't be set up (common in serverless)
-    console.warn('Static assets directory not available:', error.message);
+
+  // Serve static files from uploads directory (only if it exists)
+  const storagePath = configService.get<string>('storage.path') || join(process.cwd(), 'uploads');
+  const absoluteStoragePath = storagePath.startsWith('/') ? storagePath : join(process.cwd(), storagePath);
+  if (existsSync(absoluteStoragePath)) {
+    app.useStaticAssets(absoluteStoragePath, {
+      prefix: '/api/storage/',
+    });
   }
 
-  // Enable CORS
-  const nodeEnv = configService.get('nodeEnv') || 'development';
+  // CORS setup
+  const nodeEnv = configService.get('nodeEnv') || 'production';
   const frontendUrl = configService.get('frontendUrl') || 'https://rt-syr.com';
-  console.log('frontendUrl', frontendUrl);
-  // In development, allow multiple localhost origins
+
   const allowedOrigins = nodeEnv === 'development'
     ? [
         frontendUrl,
         'http://localhost:3000',
         'http://localhost:8080',
-        'http://localhost:5173', // Vite default
-        'http://localhost:5174',
+        'http://localhost:5173',
         'http://127.0.0.1:3000',
-        'http://127.0.0.1:8080',
-        'http://127.0.0.1:5173',
-        'https://rt-syr.com',
       ]
-    : [frontendUrl];
+    : [frontendUrl]; // Production: allow only your frontend domain
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps or curl requests)
-      if (!origin) {
-        return callback(null, true);
-      }
-      
-      // In development, allow all localhost origins
-      if (nodeEnv === 'development') {
-        const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
-        if (isLocalhost || allowedOrigins.includes(origin)) {
-          return callback(null, true);
-        }
-      }
-      
-      // In production, only allow configured origins
+      // Allow requests with no origin (curl, mobile apps)
+      if (!origin) return callback(null, true);
+
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -78,24 +51,22 @@ async function bootstrap() {
     allowedHeaders: ['Content-Type', 'Authorization'],
   });
 
-  // Global validation pipe
+  // Global validation
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
       forbidNonWhitelisted: true,
       transform: true,
-      transformOptions: {
-        enableImplicitConversion: true,
-      },
+      transformOptions: { enableImplicitConversion: true },
     }),
   );
 
-  // API prefix
+  // Global API prefix
   app.setGlobalPrefix('api');
 
-  // Swagger configuration with error handling
+  // Swagger setup
   try {
-    const config = new DocumentBuilder()
+    const swaggerConfig = new DocumentBuilder()
       .setTitle('RT Backend API')
       .setDescription('API documentation for RT Backend application')
       .setVersion('1.0')
@@ -104,9 +75,7 @@ async function bootstrap() {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'JWT',
-          name: 'JWT',
           description: 'Enter JWT token',
-          in: 'header',
         },
         'JWT-auth',
       )
@@ -123,22 +92,20 @@ async function bootstrap() {
       .addTag('admin', 'Admin operations')
       .build();
 
-    const document = SwaggerModule.createDocument(app, config);
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
     SwaggerModule.setup('api/docs', app, document, {
-      swaggerOptions: {
-        persistAuthorization: true,
-      },
+      swaggerOptions: { persistAuthorization: true },
     });
     console.log('✅ Swagger documentation setup successfully');
   } catch (error) {
     console.error('❌ Failed to setup Swagger:', error);
-    // Continue without Swagger if it fails
   }
 
-  const port = configService.get('port');
+  const port = configService.get<number>('port') || 3001;
   await app.listen(port);
-  
-  console.log(`🚀 Application is running on: http://localhost:${port}/api`);
-  console.log(`📚 Swagger documentation available at: http://localhost:${port}/api/docs`);
+
+  console.log(`🚀 Backend running at: http://localhost:${port}/api`);
+  console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
 }
+
 bootstrap();
